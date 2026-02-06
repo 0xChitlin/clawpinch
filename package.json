@@ -1,6 +1,6 @@
 {
   "name": "clawpinch",
-  "version": "1.0.2",
+  "version": "1.2.0",
   "description": "OpenClaw Security Audit Toolkit - comprehensive configuration and deployment scanner",
   "author": "MikeeBuilds",
   "license": "MIT",
@@ -13,6 +13,8 @@
     "scripts/",
     "references/",
     "SKILL.md",
+    "CLAUDE.md",
+    ".claude/",
     "README.md"
   ],
   "keywords": [

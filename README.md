@@ -15,7 +15,7 @@
 ```
 
 [![npm](https://img.shields.io/npm/v/clawpinch)](https://www.npmjs.com/package/clawpinch)
-![Version](https://img.shields.io/badge/version-1.0.2-blue)
+![Version](https://img.shields.io/badge/version-1.2.0-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)
 
@@ -89,15 +89,57 @@ bash clawpinch.sh
 | Supply-chain integrity checks     |     Y     |      --     |
 | Structured JSON output            |     Y     |      --     |
 | Auto-fix suggestions              |     Y     |      --     |
+| AI agent remediation              |     Y     |      --     |
+| Claude Code integration           |     Y     |      --     |
 | Threat model reference            |     Y     |      --     |
 | Total checks                      |   63      |     ~20     |
+
+---
+
+## AI Agent Integration (v1.2)
+
+ClawPinch is designed to be operated by AI agents without human intervention.
+
+### Interactive Review: Ask AI
+
+In the interactive review mode, press `[a]` on any finding to copy a structured remediation prompt to your clipboard. Paste it into Claude Code or any AI assistant to get a fix — works even when no `auto_fix` command exists.
+
+### Export AI Remediation Skill
+
+Menu option `[4]` generates a `clawpinch-remediation-YYYY-MM-DD.md` task list designed for AI agents: numbered tasks by severity, acceptance criteria per task, and checkboxes for tracking.
+
+### Automated Remediation Pipeline
+
+```bash
+# Scan and pipe all findings directly to Claude for automated fixing
+clawpinch --remediate
+```
+
+This runs the scan, filters out passing checks, and pipes the findings to `claude -p` which fixes each issue autonomously. Set `CLAWPINCH_CLAUDE_BIN` to override the Claude CLI path.
+
+### Claude Code Slash Commands
+
+When this repo is open in Claude Code:
+
+- `/clawpinch-scan` — Run a security audit and summarize results
+- `/clawpinch-fix` — Scan and remediate all findings
+
+### Self-Installation for AI Agents
+
+AI agents can discover ClawPinch via the `SKILL.md` frontmatter and install it with:
+
+```bash
+npx clawpinch --json --no-interactive
+```
+
+No human interaction required. See `SKILL.md` for the full machine-readable specification.
 
 ---
 
 ## Usage
 
 ```bash
-# Standard scan
+# Standard interactive scan (review findings, auto-fix, export reports)
 bash clawpinch.sh
 
 # Deep scan (supply-chain hash verification, skill decompilation)
@@ -106,8 +148,14 @@ bash clawpinch.sh --deep
 # JSON output for CI/CD pipelines
 bash clawpinch.sh --json
 
-# Scan only specific categories
-bash clawpinch.sh --scanners config,secrets,network
+# Quiet mode -- summary line only
+bash clawpinch.sh --quiet
+
+# Skip interactive menu
+bash clawpinch.sh --no-interactive
+
+# AI-powered remediation -- scan then pipe findings to Claude for automated fixing
+bash clawpinch.sh --remediate
 
 # Point at a custom config directory
 bash clawpinch.sh --config-dir /path/to/openclaw/config
@@ -136,7 +184,7 @@ bash clawpinch.sh --fix
   │  ██║     ██║██║ ╚████║╚██████╗██║  ██║              │
   │  ╚═╝     ╚═╝╚═╝  ╚═══╝ ╚═════╝╚═╝  ╚═╝              │
   │                                                      │
-  │         Don't get pinched.  v1.0.2                   │
+  │         Don't get pinched.  v1.2.0                   │
   ╰──────────────────────────────────────────────────────╯
 
   [info]  OS detected: macos
@@ -303,6 +351,7 @@ clawpinch/
       common.sh           # Color system, NO_COLOR, logging, finding emitter
       report.sh           # Terminal UI rendering (banner, cards, dashboard)
       redact.sh           # Secret redaction utilities
+      interactive.sh      # Post-scan menu: review, auto-fix, AI remediation
     scan_config.sh        # Configuration scanner
     scan_secrets.py       # Secrets scanner (Python)
     scan_network.sh       # Network scanner
@@ -318,7 +367,12 @@ clawpinch/
     check-catalog.md      # Full check catalog with remediation
   website/
     index.html            # Project landing page
-  SKILL.md                # OpenClaw skill definition
+  .claude/
+    commands/
+      clawpinch-scan.md   # /clawpinch-scan slash command
+      clawpinch-fix.md    # /clawpinch-fix slash command
+  SKILL.md                # AI-readable skill definition (YAML frontmatter)
+  CLAUDE.md               # Project context for Claude Code
   README.md               # This file
 ```
 

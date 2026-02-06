@@ -13,6 +13,7 @@ HELPERS_DIR="$SCRIPTS_DIR/helpers"
 source "$HELPERS_DIR/common.sh"
 source "$HELPERS_DIR/report.sh"
 source "$HELPERS_DIR/redact.sh"
+source "$HELPERS_DIR/interactive.sh"
 
 # ─── Defaults ────────────────────────────────────────────────────────────────
 
@@ -20,6 +21,8 @@ DEEP=0
 JSON_OUTPUT=0
 SHOW_FIX=0
 QUIET=0
+NO_INTERACTIVE=0
+REMEDIATE=0
 CONFIG_DIR=""
 
 # ─── Usage ───────────────────────────────────────────────────────────────────
@@ -33,6 +36,8 @@ Options:
   --json            Output findings as JSON array only
   --fix             Show auto-fix commands in report
   --quiet           Print summary line only
+  --no-interactive  Disable interactive post-scan menu
+  --remediate       Run scan then pipe findings to Claude for AI remediation
   --config-dir PATH Explicit path to openclaw config directory
   -h, --help        Show this help message
 
@@ -51,6 +56,8 @@ while [[ $# -gt 0 ]]; do
     --json)       JSON_OUTPUT=1; shift ;;
     --fix)        SHOW_FIX=1; shift ;;
     --quiet)      QUIET=1; shift ;;
+    --no-interactive) NO_INTERACTIVE=1; shift ;;
+    --remediate)  REMEDIATE=1; NO_INTERACTIVE=1; shift ;;
     --config-dir)
       if [[ -z "${2:-}" ]]; then
         log_error "--config-dir requires a path argument"
@@ -60,7 +67,7 @@ while [[ $# -gt 0 ]]; do
     -h|--help)    usage ;;
     -v|--version)
       node -e "console.log('clawpinch v' + require('$CLAWPINCH_DIR/package.json').version)" 2>/dev/null \
-        || echo "clawpinch v1.0.2"
+        || echo "clawpinch v1.2.0"
       exit 0 ;;
     *)
       log_error "Unknown option: $1"
@@ -231,20 +238,64 @@ if [[ "$JSON_OUTPUT" -eq 1 ]]; then
   echo "$SORTED_FINDINGS" | jq -c .
 else
   if [[ "$QUIET" -eq 0 ]]; then
-    # Print each finding as a card
-    total="$(echo "$SORTED_FINDINGS" | jq 'length')"
-    if (( total > 0 )); then
-      for i in $(seq 0 $((total - 1))); do
-        finding="$(echo "$SORTED_FINDINGS" | jq -c ".[$i]")"
-        print_finding "$finding"
-      done
+    # Determine if interactive mode is available
+    _is_interactive=0
+    if [[ "$NO_INTERACTIVE" -eq 0 ]] && [[ -t 0 ]]; then
+      _is_interactive=1
+    fi
+
+    if [[ "$_is_interactive" -eq 1 ]]; then
+      # Compact grouped table (new v1.1 display)
+      print_findings_compact "$SORTED_FINDINGS"
     else
-      log_info "No findings reported by any scanner."
+      # Non-interactive fallback: full card display (v1.0 behavior)
+      total="$(echo "$SORTED_FINDINGS" | jq 'length')"
+      if (( total > 0 )); then
+        for i in $(seq 0 $((total - 1))); do
+          finding="$(echo "$SORTED_FINDINGS" | jq -c ".[$i]")"
+          print_finding "$finding"
+        done
+      else
+        log_info "No findings reported by any scanner."
+      fi
     fi
   fi
 
   # Always print summary dashboard
   print_summary "$count_critical" "$count_warn" "$count_info" "$count_ok" "$scanner_count" "$_scan_elapsed"
+
+  # Launch interactive menu if TTY and not disabled
+  if [[ "$QUIET" -eq 0 ]] && [[ "$NO_INTERACTIVE" -eq 0 ]] && [[ -t 0 ]]; then
+    interactive_menu "$SORTED_FINDINGS" "$scanner_count" "$_scan_elapsed"
+  fi
+
+  # ─── AI Remediation pipeline ─────────────────────────────────────────────
+  if [[ "$REMEDIATE" -eq 1 ]]; then
+    # Locate Claude CLI
+    _claude_bin="${CLAWPINCH_CLAUDE_BIN:-}"
+    if [[ -z "$_claude_bin" ]]; then
+      _claude_bin="$(command -v claude 2>/dev/null || true)"
+    fi
+    if [[ -z "$_claude_bin" ]] && [[ -x "$HOME/.local/bin/claude" ]]; then
+      _claude_bin="$HOME/.local/bin/claude"
+    fi
+
+    if [[ -z "$_claude_bin" ]]; then
+      log_error "Claude CLI not found. Install it or set CLAWPINCH_CLAUDE_BIN."
+    else
+      _non_ok_findings="$(echo "$SORTED_FINDINGS" | jq -c '[.[] | select(.severity != "ok")]')"
+      _non_ok_count="$(echo "$_non_ok_findings" | jq 'length')"
+
+      if (( _non_ok_count > 0 )); then
+        log_info "Piping $_non_ok_count findings to Claude for remediation..."
+        echo "$_non_ok_findings" | "$_claude_bin" -p \
+          --allowedTools "Bash,Read,Write,Edit,Glob,Grep" \
+          "You are a security remediation agent. You have been given ClawPinch security scan findings as JSON. For each finding: 1) Read the evidence to understand the issue 2) Apply the auto_fix command if available, otherwise implement the remediation manually 3) Verify the fix. Work through findings in order (critical first). Be precise and minimal in your changes."
+      else
+        log_info "No actionable findings for remediation."
+      fi
+    fi
+  fi
 fi
 
 # ─── Exit code ───────────────────────────────────────────────────────────────

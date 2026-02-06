@@ -1,220 +1,143 @@
-# ClawPinch -- OpenClaw Security Audit Skill
+---
+name: clawpinch
+description: "Security audit toolkit for OpenClaw deployments. Scans 63 checks across 8 categories. Use when asked to audit security, harden an installation, check for vulnerabilities, or review config safety."
+version: "1.2.0"
+author: MikeeBuilds
+license: MIT
+platforms:
+  - macOS
+  - Linux
+---
 
-## Metadata
+## When to Use
 
-| Field       | Value                                                        |
-|-------------|--------------------------------------------------------------|
-| **Name**    | ClawPinch                                                    |
-| **Version** | 0.1.0                                                        |
-| **Author**  | ClawPinch Contributors                                       |
-| **License** | MIT                                                          |
-| **Platform**| macOS, Linux                                                 |
+- User asks to "audit security", "check for vulnerabilities", or "harden" an OpenClaw deployment
+- After installing or updating OpenClaw or any skill
+- Before deploying to production
+- During security reviews or incident response
+- When investigating suspicious skill behavior
 
-## Description
+## Installation
 
-Comprehensive security audit toolkit for OpenClaw deployments. ClawPinch
-inspects gateway configuration, installed skills, channel bindings, cron
-schedules, network exposure, secrets hygiene, supply-chain integrity, and
-known CVEs -- then produces a prioritised report with remediation steps.
+### Method 1: npx (no install)
+```bash
+npx clawpinch
+```
 
-## Goal
+### Method 2: Global install
+```bash
+npm install -g clawpinch
+clawpinch
+```
 
-Audit an OpenClaw installation for:
+### Method 3: From source
+```bash
+git clone https://github.com/MikeeBuilds/clawpinch.git
+cd clawpinch
+bash clawpinch.sh
+```
 
-- Misconfigurations that weaken the security posture
-- Exposed or hardcoded secrets (API keys, tokens, passwords)
-- Malicious or over-privileged skills
-- Network services reachable from untrusted interfaces
-- Weak or missing cron sandbox controls
-- Permissions that violate least-privilege
-- Supply-chain risks (unsigned skills, compromised registries)
-- Known CVEs in the installed OpenClaw version
-
-## Safety Rules
-
-1. **No remote execution.** ClawPinch runs entirely on the local machine. It
-   never opens outbound connections except to check version metadata from the
-   official OpenClaw registry.
-2. **No system modifications without consent.** Scanners are read-only by
-   default. Auto-fix commands are only printed, never executed, unless the
-   operator explicitly passes `--fix`.
-3. **Always redact secrets.** Any secret found during scanning is truncated to
-   its first 4 characters followed by `****` in all output.
-4. **Treat all skills as untrusted.** Skill manifest analysis applies a
-   deny-by-default policy -- every declared permission must be justified.
-5. **No privilege escalation.** ClawPinch never requests `sudo` or elevated
-   permissions. If a check requires elevated access it is skipped with a
-   warning.
-6. **Findings are advisory.** Output is informational. The operator decides
-   whether to act on findings.
-
-## Usage
+## CLI Commands
 
 ```bash
-# Standard scan (fast, covers the most common issues)
-bash clawpinch.sh
+# Standard interactive scan
+clawpinch
 
-# Deep scan (slower, includes supply-chain hash verification and full
-# skill decompilation)
-bash clawpinch.sh --deep
+# Deep scan (supply-chain hash verification, full skill decompilation)
+clawpinch --deep
 
-# Machine-readable JSON output
-bash clawpinch.sh --json
+# JSON output for programmatic consumption
+clawpinch --json
 
-# Target a specific config directory
-bash clawpinch.sh --config-dir /path/to/openclaw/config
+# Quiet mode — summary line only
+clawpinch --quiet
 
-# Run only specific scanner categories
-bash clawpinch.sh --scanners config,secrets,network
+# Show auto-fix commands in report
+clawpinch --fix
 
-# Print suggested fix commands (does NOT execute them)
-bash clawpinch.sh --fix
+# Skip interactive menu
+clawpinch --no-interactive
+
+# AI-powered remediation — scan then pipe to Claude for automated fixing
+clawpinch --remediate
+
+# Target specific config directory
+clawpinch --config-dir /path/to/openclaw/config
+
+# Version info
+clawpinch --version
+```
+
+## Output Schema
+
+Each finding is a JSON object:
+
+```json
+{
+  "id": "CHK-CFG-001",
+  "severity": "critical | warn | info | ok",
+  "title": "Short description",
+  "description": "Detailed explanation",
+  "evidence": "Relevant snippet or value",
+  "remediation": "How to fix",
+  "auto_fix": "Shell command to fix (may be empty)"
+}
 ```
 
 ## Check Categories
 
-### Configuration (CHK-CFG-001 .. CHK-CFG-010)
+| Category | ID Range | Count | Description |
+|----------|----------|-------|-------------|
+| Configuration | CHK-CFG-001..010 | 10 | Gateway, TLS, auth, CORS, rate limiting |
+| Secrets | CHK-SEC-001..008 | 8 | API keys, passwords, tokens, .env files |
+| Network | CHK-NET-001..008 | 8 | Port exposure, WebSocket auth, DNS rebinding |
+| Skills | CHK-SKL-001..010 | 10 | Permissions, signatures, eval patterns |
+| Permissions | CHK-PRM-001..008 | 8 | Least-privilege, wildcards, cross-tenant |
+| Cron | CHK-CRN-001..006 | 6 | Sandbox, timeouts, privilege escalation |
+| CVE | CHK-CVE-001..005 | 5 | Known vulnerabilities, outdated deps |
+| Supply Chain | CHK-SUP-001..008 | 8 | Registry trust, hash verification, lockfiles |
 
-| ID            | Title                                       |
-|---------------|---------------------------------------------|
-| CHK-CFG-001   | Gateway listening on 0.0.0.0                |
-| CHK-CFG-002   | Gateway auth disabled                       |
-| CHK-CFG-003   | TLS not enabled on gateway                  |
-| CHK-CFG-004   | Debug mode enabled in production            |
-| CHK-CFG-005   | Config file world-readable                  |
-| CHK-CFG-006   | Default admin credentials unchanged         |
-| CHK-CFG-007   | Permissive CORS policy (wildcard origin)    |
-| CHK-CFG-008   | Session timeout exceeds 24 hours            |
-| CHK-CFG-009   | Rate limiting not configured                |
-| CHK-CFG-010   | Audit logging disabled                      |
+## Integration Patterns
 
-### Secrets (CHK-SEC-001 .. CHK-SEC-008)
-
-| ID            | Title                                       |
-|---------------|---------------------------------------------|
-| CHK-SEC-001   | API key found in config file                |
-| CHK-SEC-002   | Hardcoded password in skill manifest        |
-| CHK-SEC-003   | Private key in config directory             |
-| CHK-SEC-004   | .env file with secrets in working dir       |
-| CHK-SEC-005   | Token in shell history                      |
-| CHK-SEC-006   | Unencrypted credential store                |
-| CHK-SEC-007   | Secret passed via environment variable      |
-| CHK-SEC-008   | Git repo contains committed secrets         |
-
-### Network (CHK-NET-001 .. CHK-NET-008)
-
-| ID            | Title                                       |
-|---------------|---------------------------------------------|
-| CHK-NET-001   | Gateway port exposed to public interface    |
-| CHK-NET-002   | WebSocket endpoint lacks authentication     |
-| CHK-NET-003   | HTTP used instead of HTTPS                  |
-| CHK-NET-004   | Proxy misconfiguration leaks internal IPs   |
-| CHK-NET-005   | DNS rebinding protection missing            |
-| CHK-NET-006   | Open redirect in auth callback              |
-| CHK-NET-007   | Server headers disclose version info        |
-| CHK-NET-008   | Unrestricted outbound from skill sandbox    |
-
-### Skills (CHK-SKL-001 .. CHK-SKL-010)
-
-| ID            | Title                                       |
-|---------------|---------------------------------------------|
-| CHK-SKL-001   | Skill requests filesystem write access      |
-| CHK-SKL-002   | Skill requests network access               |
-| CHK-SKL-003   | Skill requests shell execution              |
-| CHK-SKL-004   | Skill not signed                            |
-| CHK-SKL-005   | Skill has known malicious hash              |
-| CHK-SKL-006   | Skill requests access to other skills       |
-| CHK-SKL-007   | Skill manifest references external URL      |
-| CHK-SKL-008   | Skill uses eval() or exec() patterns        |
-| CHK-SKL-009   | Skill version pinned to mutable tag         |
-| CHK-SKL-010   | Skill overrides safety rules                |
-
-### Permissions (CHK-PRM-001 .. CHK-PRM-008)
-
-| ID            | Title                                       |
-|---------------|---------------------------------------------|
-| CHK-PRM-001   | Skill granted admin-level permissions       |
-| CHK-PRM-002   | Wildcard permission grant                   |
-| CHK-PRM-003   | Channel can invoke privileged skills        |
-| CHK-PRM-004   | No permission boundary between skills       |
-| CHK-PRM-005   | User role allows skill installation         |
-| CHK-PRM-006   | API token has excessive scopes              |
-| CHK-PRM-007   | Cross-tenant access not restricted          |
-| CHK-PRM-008   | Permission changes not audited              |
-
-### Cron (CHK-CRN-001 .. CHK-CRN-006)
-
-| ID            | Title                                       |
-|---------------|---------------------------------------------|
-| CHK-CRN-001   | Cron job runs as root                       |
-| CHK-CRN-002   | Cron job executes un-reviewed skill         |
-| CHK-CRN-003   | Cron schedule allows rapid-fire execution   |
-| CHK-CRN-004   | Cron job lacks timeout                      |
-| CHK-CRN-005   | Cron job output not captured                |
-| CHK-CRN-006   | Cron job has network access                 |
-
-### CVE (CHK-CVE-001 .. CHK-CVE-005)
-
-| ID            | Title                                       |
-|---------------|---------------------------------------------|
-| CHK-CVE-001   | OpenClaw version vulnerable to known CVE    |
-| CHK-CVE-002   | Gateway auth bypass (CVE-2026-25253)        |
-| CHK-CVE-003   | Docker sandbox escape (CVE-2026-24763)      |
-| CHK-CVE-004   | SSH path injection (CVE-2026-25157)         |
-| CHK-CVE-005   | Outdated dependency with known vuln         |
-
-### Supply Chain (CHK-SUP-001 .. CHK-SUP-008)
-
-| ID            | Title                                       |
-|---------------|---------------------------------------------|
-| CHK-SUP-001   | Skill installed from untrusted registry     |
-| CHK-SUP-002   | Skill hash does not match registry          |
-| CHK-SUP-003   | Registry URL uses HTTP, not HTTPS           |
-| CHK-SUP-004   | Skill depends on deprecated package         |
-| CHK-SUP-005   | Skill pulls transitive dependency at runtime|
-| CHK-SUP-006   | No lockfile for installed skills            |
-| CHK-SUP-007   | Registry certificate not pinned             |
-| CHK-SUP-008   | Skill author identity not verified          |
-
-## Workflow
-
-```
-  collect          analyze          report          suggest
- ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐
- │ Read      │───▶│ Run      │───▶│ Rank by  │───▶│ Print    │
- │ config,   │    │ scanners │    │ severity │    │ findings │
- │ skills,   │    │ against  │    │ & dedup  │    │ & fixes  │
- │ network   │    │ rules    │    │          │    │          │
- └──────────┘    └──────────┘    └──────────┘    └──────────┘
+### OpenClaw Skill
+```bash
+npx skills add https://github.com/MikeeBuilds/clawpinch --skill clawpinch
 ```
 
-1. **Collect** -- Locate the OpenClaw config directory. Enumerate installed
-   skills, channel bindings, cron entries, and running gateway processes.
-2. **Analyze** -- Execute each scanner category. Every check emits structured
-   JSON findings via `emit_finding()`.
-3. **Report** -- Aggregate findings, de-duplicate, sort by severity
-   (critical > warn > info > ok), and render to the selected output format.
-4. **Suggest** -- For each finding with a known remediation, print a
-   human-readable fix. With `--fix`, also print executable shell commands.
+### Claude Code
+```bash
+# Slash commands (when repo is open in Claude Code)
+/clawpinch-scan    # Run security audit
+/clawpinch-fix     # Scan and fix all findings
 
-## Output Format
+# Direct remediation
+clawpinch --remediate
+```
 
-Each finding follows the schema defined in `scripts/helpers/common.sh`:
-
-```json
-{
-  "id":          "CHK-CFG-001",
-  "severity":    "critical",
-  "title":       "Gateway listening on 0.0.0.0",
-  "description": "The gateway is bound to all interfaces, exposing it to the network.",
-  "evidence":    "bindAddress: 0.0.0.0:3000",
-  "remediation": "Set bindAddress to 127.0.0.1 in openclaw.json",
-  "auto_fix":    "jq '.gateway.bindAddress = \"127.0.0.1:3000\"' openclaw.json > tmp && mv tmp openclaw.json"
-}
+### CI/CD
+```bash
+npx clawpinch --json --no-interactive | jq '[.[] | select(.severity == "critical")] | length'
+# Exit code 1 if any critical findings
+npx clawpinch --quiet --no-interactive
 ```
 
 ## Dependencies
 
 - **Required:** `bash` >= 4.0, `jq`
-- **Optional:** `openssl` (TLS checks), `nmap` / `ss` (network checks),
-  `sha256sum` / `shasum` (supply-chain hash verification)
+- **Optional:** `openssl` (TLS checks), `nmap` / `ss` (network checks), `sha256sum` / `shasum` (supply-chain hash verification), `claude` CLI (for --remediate)
+
+## Safety Rules
+
+1. **No remote execution.** Runs entirely local. No outbound connections except version metadata checks.
+2. **No system modifications without consent.** Scanners are read-only by default.
+3. **Always redact secrets.** Secrets truncated to first 4 chars + `****` in all output.
+4. **Treat all skills as untrusted.** Deny-by-default permission policy.
+5. **No privilege escalation.** Never requests `sudo`.
+6. **Findings are advisory.** Output is informational — operator decides whether to act.
+
+## Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| 0 | No critical findings |
+| 1 | One or more critical findings detected |
