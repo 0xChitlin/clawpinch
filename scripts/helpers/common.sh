@@ -5,14 +5,104 @@ set -euo pipefail
 # Source this file from any scanner:
 #   source "$(dirname "$0")/helpers/common.sh"
 
-# ─── Logging ────────────────────────────────────────────────────────────────
+# ─── NO_COLOR & color capability detection ─────────────────────────────────
 
-_CLR_RED='\033[0;31m'
-_CLR_YLW='\033[0;33m'
-_CLR_BLU='\033[0;34m'
-_CLR_GRN='\033[0;32m'
-_CLR_DIM='\033[2m'
-_CLR_RST='\033[0m'
+_CLAWPINCH_HAS_256=0
+_CLAWPINCH_HAS_COLOR=1
+
+# Respect NO_COLOR spec (https://no-color.org/)
+if [[ -n "${NO_COLOR:-}" ]]; then
+  _CLAWPINCH_HAS_COLOR=0
+  _CLAWPINCH_HAS_256=0
+elif [[ ! -t 2 ]] && [[ "${FORCE_COLOR:-}" != "1" ]]; then
+  # stderr not a terminal and color not forced
+  _CLAWPINCH_HAS_COLOR=0
+  _CLAWPINCH_HAS_256=0
+else
+  # Detect 256-color / truecolor support
+  if [[ "${COLORTERM:-}" == "truecolor" ]] || [[ "${COLORTERM:-}" == "24bit" ]] \
+     || [[ "${TERM:-}" == *256color* ]] || [[ "${TERM:-}" == *kitty* ]] \
+     || [[ "${TERM_PROGRAM:-}" == "iTerm.app" ]] || [[ "${TERM_PROGRAM:-}" == "WezTerm" ]]; then
+    _CLAWPINCH_HAS_256=1
+  fi
+fi
+
+export _CLAWPINCH_HAS_COLOR _CLAWPINCH_HAS_256
+
+# ─── Color palette ─────────────────────────────────────────────────────────
+# 256-color with 16-color fallback; all empty when NO_COLOR
+
+if [[ "$_CLAWPINCH_HAS_COLOR" -eq 1 ]]; then
+  if [[ "$_CLAWPINCH_HAS_256" -eq 1 ]]; then
+    # 256-color palette
+    _CLR_CRIT='\033[38;5;196m'       # bright red
+    _CLR_WARN='\033[38;5;214m'       # orange
+    _CLR_INFO='\033[38;5;39m'        # bright blue
+    _CLR_OK='\033[38;5;48m'          # bright green
+    _CLR_BANNER_R1='\033[38;5;196m'  # red gradient start
+    _CLR_BANNER_R2='\033[38;5;201m'  # red gradient mid
+    _CLR_BANNER_R3='\033[38;5;207m'  # red gradient end
+    _CLR_BANNER_C1='\033[38;5;51m'   # cyan gradient start
+    _CLR_BANNER_C2='\033[38;5;49m'   # cyan gradient mid
+    _CLR_BANNER_C3='\033[38;5;48m'   # cyan gradient end
+    _CLR_BOX='\033[38;5;240m'        # dark gray
+    _CLR_SPINNER='\033[38;5;51m'     # cyan spinner
+  else
+    # 16-color fallback
+    _CLR_CRIT='\033[1;31m'
+    _CLR_WARN='\033[1;33m'
+    _CLR_INFO='\033[0;34m'
+    _CLR_OK='\033[0;32m'
+    _CLR_BANNER_R1='\033[1;31m'
+    _CLR_BANNER_R2='\033[1;31m'
+    _CLR_BANNER_R3='\033[1;31m'
+    _CLR_BANNER_C1='\033[0;36m'
+    _CLR_BANNER_C2='\033[0;36m'
+    _CLR_BANNER_C3='\033[0;36m'
+    _CLR_BOX='\033[2m'
+    _CLR_SPINNER='\033[0;36m'
+  fi
+
+  _CLR_RED="$_CLR_CRIT"
+  _CLR_YLW="$_CLR_WARN"
+  _CLR_BLU="$_CLR_INFO"
+  _CLR_GRN="$_CLR_OK"
+  _CLR_DIM='\033[2m'
+  _CLR_BOLD='\033[1m'
+  _CLR_WHITE='\033[1;37m'
+  _CLR_UL='\033[4m'
+  _CLR_RST='\033[0m'
+else
+  # NO_COLOR: all codes are empty strings
+  _CLR_CRIT='' _CLR_WARN='' _CLR_INFO='' _CLR_OK=''
+  _CLR_BANNER_R1='' _CLR_BANNER_R2='' _CLR_BANNER_R3=''
+  _CLR_BANNER_C1='' _CLR_BANNER_C2='' _CLR_BANNER_C3=''
+  _CLR_BOX='' _CLR_SPINNER=''
+  _CLR_RED='' _CLR_YLW='' _CLR_BLU='' _CLR_GRN=''
+  _CLR_DIM='' _CLR_BOLD='' _CLR_WHITE='' _CLR_UL='' _CLR_RST=''
+fi
+
+export _CLR_CRIT _CLR_WARN _CLR_INFO _CLR_OK
+export _CLR_BANNER_R1 _CLR_BANNER_R2 _CLR_BANNER_R3
+export _CLR_BANNER_C1 _CLR_BANNER_C2 _CLR_BANNER_C3
+export _CLR_BOX _CLR_SPINNER
+export _CLR_RED _CLR_YLW _CLR_BLU _CLR_GRN
+export _CLR_DIM _CLR_BOLD _CLR_WHITE _CLR_UL _CLR_RST
+
+# ─── Terminal width helper ─────────────────────────────────────────────────
+
+term_width() {
+  local w
+  if w="$(tput cols 2>/dev/null)"; then
+    echo "$w"
+  elif [[ -n "${COLUMNS:-}" ]]; then
+    echo "$COLUMNS"
+  else
+    echo 80
+  fi
+}
+
+# ─── Logging ────────────────────────────────────────────────────────────────
 
 log_info()  { printf "${_CLR_BLU}[info]${_CLR_RST}  %s\n" "$*" >&2; }
 log_warn()  { printf "${_CLR_YLW}[warn]${_CLR_RST}  %s\n" "$*" >&2; }

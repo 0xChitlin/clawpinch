@@ -72,6 +72,7 @@ done
 export CLAWPINCH_DEEP="$DEEP"
 export CLAWPINCH_SHOW_FIX="$SHOW_FIX"
 export CLAWPINCH_CONFIG_DIR="$CONFIG_DIR"
+export QUIET
 
 # ─── Detect OS ───────────────────────────────────────────────────────────────
 
@@ -130,13 +131,28 @@ fi
 ALL_FINDINGS="[]"
 scanner_count=${#scanners[@]}
 scanner_idx=0
+_SPINNER_PID=""
+
+# Record scan start time
+_scan_start="${EPOCHSECONDS:-$(date +%s)}"
 
 for scanner in "${scanners[@]}"; do
   scanner_idx=$((scanner_idx + 1))
   scanner_name="$(basename "$scanner")"
+  scanner_base="${scanner_name%.*}"
+
+  # Record scanner start time
+  _scanner_start="${EPOCHSECONDS:-$(date +%s)}"
 
   if [[ "$JSON_OUTPUT" -eq 0 ]] && [[ "$QUIET" -eq 0 ]]; then
-    print_progress "$scanner_idx" "$scanner_count" "Running $scanner_name"
+    # Print section header for this scanner
+    print_section_header "$scanner_name"
+
+    # Start spinner
+    local_category="$(_scanner_category "$scanner_name")"
+    local_icon="${local_category%%|*}"
+    local_name="${local_category##*|}"
+    start_spinner "Running ${local_name} scanner..."
   fi
 
   # Determine how to run the scanner
@@ -149,20 +165,39 @@ for scanner in "${scanners[@]}"; do
     elif has_cmd python; then
       output="$(python "$scanner" 2>/dev/null)" || true
     else
+      if [[ "$JSON_OUTPUT" -eq 0 ]] && [[ "$QUIET" -eq 0 ]]; then
+        stop_spinner "$local_name" 0 0
+      fi
       log_warn "Skipping $scanner_name (python not found)"
       continue
     fi
   fi
 
+  # Count findings from this scanner
+  local_count=0
+
   # Validate output is a JSON array and merge
   if [[ -n "$output" ]]; then
     if echo "$output" | jq 'type == "array"' 2>/dev/null | grep -q 'true'; then
+      local_count="$(echo "$output" | jq 'length')"
       ALL_FINDINGS="$(echo "$ALL_FINDINGS" "$output" | jq -s '.[0] + .[1]')"
     else
       log_warn "Scanner $scanner_name did not produce a valid JSON array"
     fi
   fi
+
+  # Calculate elapsed time for this scanner
+  _scanner_end="${EPOCHSECONDS:-$(date +%s)}"
+  _scanner_elapsed=$(( _scanner_end - _scanner_start ))
+
+  if [[ "$JSON_OUTPUT" -eq 0 ]] && [[ "$QUIET" -eq 0 ]]; then
+    stop_spinner "$local_name" "$local_count" "$_scanner_elapsed"
+  fi
 done
+
+# Calculate total scan time
+_scan_end="${EPOCHSECONDS:-$(date +%s)}"
+_scan_elapsed=$(( _scan_end - _scan_start ))
 
 if [[ "$JSON_OUTPUT" -eq 0 ]] && [[ "$QUIET" -eq 0 ]]; then
   printf '\n'
@@ -196,7 +231,7 @@ if [[ "$JSON_OUTPUT" -eq 1 ]]; then
   echo "$SORTED_FINDINGS" | jq -c .
 else
   if [[ "$QUIET" -eq 0 ]]; then
-    # Print each finding
+    # Print each finding as a card
     total="$(echo "$SORTED_FINDINGS" | jq 'length')"
     if (( total > 0 )); then
       for i in $(seq 0 $((total - 1))); do
@@ -206,11 +241,10 @@ else
     else
       log_info "No findings reported by any scanner."
     fi
-    printf '\n'
   fi
 
-  # Always print summary
-  print_summary "$count_critical" "$count_warn" "$count_info" "$count_ok"
+  # Always print summary dashboard
+  print_summary "$count_critical" "$count_warn" "$count_info" "$count_ok" "$scanner_count" "$_scan_elapsed"
 fi
 
 # ─── Exit code ───────────────────────────────────────────────────────────────

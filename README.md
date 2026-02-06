@@ -121,52 +121,68 @@ bash clawpinch.sh --fix
 ## Example Output
 
 ```
- ══════════════════════════════════════════════════════════
-   ClawPinch v0.1.0 -- OpenClaw Security Audit
- ══════════════════════════════════════════════════════════
+  ╭──────────────────────────────────────────────────────╮
+  │                                                      │
+  │   ██████╗██╗      █████╗ ██╗    ██╗                  │
+  │  ██╔════╝██║     ██╔══██╗██║    ██║                  │
+  │  ██║     ██║     ███████║██║ █╗ ██║                  │
+  │  ██║     ██║     ██╔══██║██║███╗██║                  │
+  │  ╚██████╗███████╗██║  ██║╚███╔███╔╝                  │
+  │   ╚═════╝╚══════╝╚═╝  ╚═╝ ╚══╝╚══╝                  │
+  │  ██████╗ ██╗███╗   ██╗ ██████╗██╗  ██╗              │
+  │  ██╔══██╗██║████╗  ██║██╔════╝██║  ██║              │
+  │  ██████╔╝██║██╔██╗ ██║██║     ███████║              │
+  │  ██╔═══╝ ██║██║╚██╗██║██║     ██╔══██║              │
+  │  ██║     ██║██║ ╚████║╚██████╗██║  ██║              │
+  │  ╚═╝     ╚═╝╚═╝  ╚═══╝ ╚═════╝╚═╝  ╚═╝              │
+  │                                                      │
+  │         Don't get pinched.  v1.0.0                   │
+  ╰──────────────────────────────────────────────────────╯
 
- [info]  OpenClaw version: 2026.1.28
- [info]  Config: /home/user/.config/openclaw/openclaw.json
- [info]  Running 8 scanner categories (63 checks)...
+  [info]  OS detected: macos
+  [info]  OpenClaw config: ~/.config/openclaw/openclaw.json
 
- ── Config Scanner ──────────────────────────────────────
- [CRITICAL]  CHK-CFG-001  Gateway listening on 0.0.0.0
-             Bind to 127.0.0.1 to restrict access.
- [CRITICAL]  CHK-CFG-002  Gateway auth disabled
-             Enable requireAuth in openclaw.json.
- [WARN]      CHK-CFG-007  Permissive CORS policy (wildcard origin)
-             Restrict allowedOrigins to specific domains.
- [OK]        CHK-CFG-003  TLS enabled on gateway
+  ┌─ 🔧 Configuration ──────────────────────────────────┐
+  ✓ Configuration  (4 findings, 1.2s)
 
- ── Secrets Scanner ─────────────────────────────────────
- [CRITICAL]  CHK-SEC-001  API key found in config file
-             Evidence: sk-a]4f****
-             Move to a secrets manager or .env excluded from VCS.
- [OK]        CHK-SEC-003  No private keys in config directory
+  ┌─ 🔑 Secrets ────────────────────────────────────────┐
+  ✓ Secrets  (2 findings, 0.8s)
 
- ── Skills Scanner ──────────────────────────────────────
- [CRITICAL]  CHK-SKL-003  Skill "code-runner" requests shell execution
-             Review skill permissions. Remove if not essential.
- [WARN]      CHK-SKL-004  Skill "weather-lookup" not signed
-             Install only signed skills from trusted registries.
- [OK]        CHK-SKL-005  No known malicious skill hashes
+  ┃ ● CRITICAL                            CHK-CFG-001 ┃
+  ┃ exec.ask not set to always                         ┃
+  ┃                                                    ┃
+  ┃ The exec.ask setting controls whether the user is  ┃
+  ┃ prompted before command execution.                 ┃
+  ┃                                                    ┃
+  ┃ Evidence: exec.ask=null                            ┃
+  ┃ Fix: Set exec.ask to 'always' in openclaw.json     ┃
+  └────────────────────────────────────────────────────┘
 
- ── Network Scanner ─────────────────────────────────────
- [CRITICAL]  CHK-NET-001  Gateway port 3000 exposed to public interface
-             Bind to localhost or place behind a reverse proxy.
- [OK]        CHK-NET-003  HTTPS in use
+  ✓ No secrets detected                      CHK-SEC-000
 
- ── CVE Scanner ─────────────────────────────────────────
- [CRITICAL]  CHK-CVE-002  Gateway auth bypass (CVE-2026-25253)
-             Upgrade to OpenClaw >= 2026.1.29 immediately.
- [CRITICAL]  CHK-CVE-003  Docker sandbox escape (CVE-2026-24763)
-             Upgrade to OpenClaw >= 2026.1.29 immediately.
-
- ══════════════════════════════════════════════════════════
-   RESULTS: 6 critical | 2 warn | 0 info | 4 ok
-   Run with --fix to see remediation commands.
- ══════════════════════════════════════════════════════════
+  ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+  ┃              ClawPinch Scan Results                ┃
+  ┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+  ┃                                                    ┃
+  ┃  ● CRITICAL   12    ████████████░░░░░░░░  38%     ┃
+  ┃  ● WARNING     5    █████░░░░░░░░░░░░░░░  16%     ┃
+  ┃  ● INFO        3    ███░░░░░░░░░░░░░░░░░  10%     ┃
+  ┃  ✓ OK         11    ███████████░░░░░░░░░  35%     ┃
+  ┃                                                    ┃
+  ┃  Total: 31 findings across 8 scanners              ┃
+  ┃  Scan completed in 3.4s                            ┃
+  ┃                                                    ┃
+  ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 ```
+
+The terminal UI features:
+- **Gradient ASCII art banner** -- "CLAW" in red/magenta, "PINCH" in cyan/green (256-color)
+- **Braille spinner** -- animated `⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏` during each scanner with timing
+- **Box-drawn finding cards** -- severity-colored left border, right-aligned check ID
+- **Compact OK findings** -- single-line `✓` format
+- **Dashboard summary** -- heavy-bordered box with `█░` bar charts and percentages
+- **`NO_COLOR` support** -- set `NO_COLOR=1` for plain text output (respects [no-color.org](https://no-color.org))
+- **256-color with 16-color fallback** -- auto-detected from `$TERM` / `$COLORTERM`
 
 ---
 
@@ -281,20 +297,23 @@ bash clawpinch.sh --fix
 
 ```
 clawpinch/
-  clawpinch.sh            # Main orchestrator
+  clawpinch.sh            # Main orchestrator (spinner, timing, section headers)
   scripts/
     helpers/
-      common.sh           # Shared logging, finding emitter, config helpers
+      common.sh           # Color system, NO_COLOR, logging, finding emitter
+      report.sh           # Terminal UI rendering (banner, cards, dashboard)
+      redact.sh           # Secret redaction utilities
     scan_config.sh        # Configuration scanner
-    scan_secrets.sh       # Secrets scanner
+    scan_secrets.py       # Secrets scanner (Python)
     scan_network.sh       # Network scanner
     scan_skills.sh        # Skills scanner
     scan_permissions.sh   # Permissions scanner
-    scan_cron.sh          # Cron scanner
-    scan_cve.sh           # CVE scanner
+    scan_crons.sh         # Cron scanner
+    scan_cves.sh          # CVE scanner
     scan_supply_chain.sh  # Supply chain scanner
   references/
     known-cves.json       # CVE database
+    malicious-patterns.json # ClawHavoc signatures
     threat-model.md       # OpenClaw threat model
     check-catalog.md      # Full check catalog with remediation
   website/
