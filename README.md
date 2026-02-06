@@ -14,7 +14,8 @@
        *  |__|____|_| *
 ```
 
-![Version](https://img.shields.io/badge/version-0.1.0-blue)
+[![npm](https://img.shields.io/npm/v/clawpinch)](https://www.npmjs.com/package/clawpinch)
+![Version](https://img.shields.io/badge/version-1.0.0-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)
 
@@ -30,26 +31,47 @@ threat model.
 
 ---
 
-## Quick Install
+## Install
+
+### Option 1: npx (zero install, recommended)
 
 ```bash
-git clone https://github.com/clawpinch/clawpinch.git
-cd clawpinch
-bash clawpinch.sh
+npx clawpinch
 ```
 
-Or add it as an OpenClaw skill:
+### Option 2: Global install
 
 ```bash
-openclaw skill add ./clawpinch
+npm install -g clawpinch
+clawpinch
+```
+
+### Option 3: OpenClaw skill
+
+```bash
+npx skills add https://github.com/MikeeBuilds/clawpinch --skill clawpinch
+```
+
+Then move to your skills directory and run:
+
+```bash
+mv clawpinch ~/.openclaw/workspace/skills/
 openclaw skill run clawpinch
+```
+
+### Option 4: From source
+
+```bash
+git clone https://github.com/MikeeBuilds/clawpinch.git
+cd clawpinch
+bash clawpinch.sh
 ```
 
 ### Requirements
 
 - `bash` >= 4.0
 - `jq` (install: `brew install jq` or `apt install jq`)
-- Optional: `openssl`, `nmap`, `ss`, `sha256sum`
+- Optional: `python3` (secrets scanner), `openssl`, `nmap`, `ss`, `sha256sum`
 
 ---
 

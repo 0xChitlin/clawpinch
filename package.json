@@ -2,19 +2,55 @@
   "name": "clawpinch",
   "version": "1.0.0",
   "description": "OpenClaw Security Audit Toolkit - comprehensive configuration and deployment scanner",
-  "author": "ClawPinch Team",
+  "author": "MikeeBuilds",
   "license": "MIT",
   "bin": {
     "clawpinch": "./clawpinch.sh"
   },
+  "files": [
+    "clawpinch.sh",
+    "scripts/",
+    "references/",
+    "SKILL.md",
+    "README.md"
+  ],
   "keywords": [
     "openclaw",
     "security",
     "audit",
-    "scanner"
+    "scanner",
+    "clawpinch",
+    "clawhavoc",
+    "supply-chain",
+    "cve",
+    "hardening"
   ],
   "repository": {
     "type": "git",
-    "url": ""
+    "url": "git+https://github.com/MikeeBuilds/clawpinch.git"
+  },
+  "homepage": "https://github.com/MikeeBuilds/clawpinch",
+  "bugs": {
+    "url": "https://github.com/MikeeBuilds/clawpinch/issues"
+  },
+  "os": [
+    "darwin",
+    "linux"
+  ],
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "openclaw": {
+    "skill": true,
+    "name": "clawpinch",
+    "displayName": "ClawPinch Security Audit",
+    "category": "security",
+    "permissions": [
+      "fs:read",
+      "process:list",
+      "network:scan-local"
+    ],
+    "entrypoint": "./clawpinch.sh",
+    "installHint": "npx skills add https://github.com/MikeeBuilds/clawpinch --skill clawpinch"
   }
 }
