@@ -45,6 +45,10 @@ MAX_LINE_LENGTH=10000
 # File extensions to skip (binary/media files)
 SKIP_EXTENSIONS='\.(jpg|jpeg|png|gif|bmp|ico|svg|webp|pdf|zip|tar|gz|bz2|xz|7z|rar|exe|dll|so|dylib|a|o|bin|dat|mp3|mp4|avi|mov|mkv|flv|wmv|wav|ttf|otf|woff|woff2|eot)$'
 
+# Additional files/paths to skip (performance optimization)
+# Lockfiles, generated files, test fixtures rarely contain real secrets
+SKIP_PATHS='(package-lock\.json|yarn\.lock|composer\.lock|Gemfile\.lock|poetry\.lock|pnpm-lock\.yaml|\.min\.(js|css)|\.map$|__snapshots__/|test/fixtures/|tests/fixtures/|spec/fixtures/)'
+
 # Dedupe: Track found secrets to avoid duplicate findings (bash 3.2 compatible)
 FOUND_SECRETS=""
 
@@ -53,7 +57,9 @@ FOUND_SECRETS=""
 # ---------------------------------------------------------------------------
 REPO_PATH="${GIT_REPO_PATH:-.}"
 
-if [[ ! -d "$REPO_PATH/.git" ]]; then
+# Edge case: Handle both regular repos and worktrees
+# In worktrees, .git is a file, not a directory
+if [[ ! -d "$REPO_PATH/.git" ]] && [[ ! -f "$REPO_PATH/.git" ]]; then
     # Not a git repo - output empty array (this is expected behavior)
     echo '[]'
     exit 0
@@ -76,6 +82,8 @@ fi
 
 # ---------------------------------------------------------------------------
 # Edge case: Handle shallow clones
+# Shallow clones have incomplete history, which means we might miss secrets.
+# We'll add a warning to remediation messages if shallow clone is detected.
 # ---------------------------------------------------------------------------
 IS_SHALLOW=0
 if [[ -f "$REPO_PATH/.git/shallow" ]]; then
@@ -101,13 +109,21 @@ redact_secret() {
 }
 
 # ---------------------------------------------------------------------------
-# Helper: Check if file should be skipped based on extension
+# Helper: Check if file should be skipped based on extension and path
 # ---------------------------------------------------------------------------
 should_skip_file() {
     local filepath="$1"
+
+    # Skip binary/media files by extension
     if [[ "$filepath" =~ $SKIP_EXTENSIONS ]]; then
         return 0  # skip
     fi
+
+    # Performance optimization: Skip lockfiles, generated files, test fixtures
+    if [[ "$filepath" =~ $SKIP_PATHS ]]; then
+        return 0  # skip
+    fi
+
     return 1  # don't skip
 }
 
@@ -145,13 +161,58 @@ scan_git_history() {
         time_limit="--since=6 months ago"
     fi
 
+    # Performance optimization: Check repo size and warn if very large
+    local total_commits
+    total_commits=$(cd "$REPO_PATH" && git rev-list --count --all 2>/dev/null || echo "0")
+
+    # Edge case: Warn if repo has many commits but we're not doing deep scan
+    if [[ "$total_commits" -gt 10000 ]] && [[ "${CLAWPINCH_DEEP:-0}" != "1" ]]; then
+        # Emit info finding about large repo
+        local finding
+        finding=$(emit_finding \
+            "CHK-SEC-009" \
+            "info" \
+            "Large repository detected" \
+            "Repository has $total_commits commits but scanning only $max_commits. Consider using --deep flag for thorough scan." \
+            "total_commits=$total_commits scan_depth=$max_commits" \
+            "Run with CLAWPINCH_DEEP=1 for deeper history scan" \
+            "")
+        FINDINGS+=("$finding")
+    fi
+
     # Performance optimization: Use --diff-filter to only show added content
     # --no-merges skips merge commits (reduces duplicate scanning)
     # Get git log with patches
     # Format: commit hash, file path, diff lines
     # Note: --no-textconv disables textconv filters
+    # Timeout protection: Use timeout command if available (GNU coreutils or timeout from macOS)
     local git_output
-    git_output=$(cd "$REPO_PATH" && git log -p --all --no-textconv --no-merges --diff-filter=A -n "$max_commits" $time_limit --format="COMMIT:%H" 2>/dev/null || true)
+    local timeout_cmd=""
+    if command -v timeout &>/dev/null; then
+        # Timeout after 300 seconds (5 minutes) for normal scan, 900 seconds (15 min) for deep
+        local timeout_seconds=300
+        [[ "${CLAWPINCH_DEEP:-0}" == "1" ]] && timeout_seconds=900
+        timeout_cmd="timeout ${timeout_seconds}s"
+    fi
+
+    git_output=$(cd "$REPO_PATH" && $timeout_cmd git log -p --all --no-textconv --no-merges --diff-filter=A -n "$max_commits" $time_limit --format="COMMIT:%H" 2>/dev/null || true)
+
+    # Edge case: Check if command was killed by timeout
+    local git_exit_code=$?
+    if [[ $git_exit_code -eq 124 ]] || [[ $git_exit_code -eq 137 ]]; then
+        # 124 = timeout killed the process, 137 = SIGKILL
+        local finding
+        finding=$(emit_finding \
+            "CHK-SEC-010" \
+            "warn" \
+            "Git history scan timed out" \
+            "The git history scan exceeded the time limit. Repository may be too large for complete scan." \
+            "exit_code=$git_exit_code" \
+            "Consider scanning a smaller time range or using --shallow-since with git clone" \
+            "")
+        FINDINGS+=("$finding")
+        return 0
+    fi
 
     if [[ -z "$git_output" ]]; then
         # Empty history or no commits
@@ -216,6 +277,12 @@ scan_git_history() {
             continue
         fi
 
+        # Edge case: Skip lines with null bytes or other binary indicators
+        # (some binary data may slip through extension filtering)
+        if [[ "$content" == *$'\x00'* ]] || [[ "$content" =~ [[:cntrl:]]{10,} ]]; then
+            continue
+        fi
+
         # Check each secret pattern
         for pattern_entry in "${SECRET_PATTERNS[@]}"; do
             # Parse "type|pattern" format
@@ -231,13 +298,21 @@ scan_git_history() {
                     # Skip empty matches
                     [[ -z "$secret_value" ]] && continue
 
+                    # Performance optimization: Skip very short matches (likely false positives)
+                    # Exception: private keys can have short markers
+                    if [[ ${#secret_value} -lt 8 ]] && [[ "$secret_type" != "Private key" ]]; then
+                        continue
+                    fi
+
                     # Edge case: Skip environment variable references (${VAR} or $VAR)
                     if [[ "$secret_value" =~ ^\$\{.*\}$ ]] || [[ "$secret_value" =~ ^\$[A-Z_][A-Z0-9_]*$ ]]; then
                         continue
                     fi
 
-                    # Edge case: Skip placeholder/example values
-                    if [[ "$secret_value" =~ (your|example|test|sample|placeholder|dummy|fake|xxx|yyy|zzz|000|111|abc|123) ]]; then
+                    # Edge case: Skip placeholder/example values (case-insensitive)
+                    local lower_value
+                    lower_value=$(echo "$secret_value" | tr '[:upper:]' '[:lower:]')
+                    if [[ "$lower_value" =~ (your|example|test|sample|placeholder|dummy|fake|xxx|yyy|zzz|000|111|abc|123|todo|fixme|redacted) ]]; then
                         continue
                     fi
 
