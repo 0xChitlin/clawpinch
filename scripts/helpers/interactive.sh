@@ -573,6 +573,14 @@ auto_fix_all() {
     f_id="$(echo "$fixable" | jq -r ".[$i].id")"
     f_cmd="$(echo "$fixable" | jq -r ".[$i].auto_fix")"
     printf '  [%d/%d] %s ... ' $(( i + 1 )) "$fix_count" "$f_id"
+
+    # Validate command against allowlist
+    if ! validate_command "$f_cmd"; then
+      printf '%b✗ blocked (not in allowlist)%b\n' "$_CLR_CRIT" "$_CLR_RST"
+      failed=$(( failed + 1 ))
+      continue
+    fi
+
     if eval "$f_cmd" >/dev/null 2>&1; then
       printf '%b✓ pass%b\n' "$_CLR_OK" "$_CLR_RST"
       passed=$(( passed + 1 ))
