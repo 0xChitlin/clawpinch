@@ -216,9 +216,11 @@ bash clawpinch.sh --fix
 
 ### Speedup Breakdown
 
-- **Sequential mode**: 15-20 seconds (one scanner at a time)
-- **Parallel mode** (default): 5-7 seconds (all scanners concurrently)
-- **Speedup**: 2-3x faster
+- **Sequential mode**: 15-40 seconds (one scanner at a time)
+- **Parallel mode** (default): 10-25 seconds (all scanners concurrently)
+- **Speedup**: 1.5-3x faster (system-dependent)
+
+**Note**: Actual speedup varies by system (CPU cores, I/O speed, scanner workload). Most systems see 1.5-2x improvement, with optimal systems reaching 3x.
 
 Scanners are independent (configuration, secrets, network, skills, permissions, cron, CVE, supply chain) and have no dependencies between them, making parallel execution safe and efficient.
 

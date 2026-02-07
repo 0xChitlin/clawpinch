@@ -119,8 +119,9 @@ run_scanners_parallel() {
   local temp_dir=""
   temp_dir="$(mktemp -d "${TMPDIR:-/tmp}/clawpinch.XXXXXX")"
 
-  # Set trap to ensure temp directory cleanup on exit/error
-  trap 'rm -rf "$temp_dir"' EXIT INT TERM
+  # Set trap to ensure temp directory cleanup on interrupt/termination
+  # (EXIT not needed - manual cleanup on line 175 handles normal exit)
+  trap 'rm -rf "$temp_dir"' INT TERM
 
   # Create associative arrays to track background jobs
   declare -a pids=()
