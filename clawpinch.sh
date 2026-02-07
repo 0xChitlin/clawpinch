@@ -119,13 +119,11 @@ run_scanners_parallel() {
   local temp_dir=""
   temp_dir="$(mktemp -d "${TMPDIR:-/tmp}/clawpinch.XXXXXX")"
 
-  # Set trap to ensure temp directory cleanup on interrupt/termination
-  # (EXIT not needed - manual cleanup on line 175 handles normal exit)
-  trap 'rm -rf "$temp_dir"' INT TERM
+  # Use EXIT trap for robust cleanup — covers INT, TERM, and set -e failures
+  trap 'rm -rf "$temp_dir"' EXIT
 
-  # Create associative arrays to track background jobs
+  # Track background job PIDs
   declare -a pids=()
-  declare -a scanner_names=()
 
   # Launch all scanners in parallel
   for scanner in "${scanners[@]}"; do
@@ -139,19 +137,19 @@ run_scanners_parallel() {
 
       # Run scanner - exit code doesn't matter, we just need valid JSON output
       # (Scanners exit with code 1 when they find critical findings, but still output valid JSON)
+      # Use command -v instead of has_cmd — bash functions aren't inherited by subshells
       if [[ "$scanner" == *.sh ]]; then
         bash "$scanner" > "$temp_file" 2>/dev/null || true
       elif [[ "$scanner" == *.py ]]; then
-        if has_cmd python3; then
+        if command -v python3 &>/dev/null; then
           python3 "$scanner" > "$temp_file" 2>/dev/null || true
-        elif has_cmd python; then
+        elif command -v python &>/dev/null; then
           python "$scanner" > "$temp_file" 2>/dev/null || true
         fi
       fi
     ) &
 
     pids+=("$!")
-    scanner_names+=("$scanner_name")
   done
 
   # Wait for all background jobs to complete
@@ -165,15 +163,14 @@ run_scanners_parallel() {
     if [[ -f "$temp_file" ]]; then
       output="$(cat "$temp_file")"
       if [[ -n "$output" ]]; then
-        if echo "$output" | jq 'type == "array"' 2>/dev/null | grep -q 'true'; then
+        if echo "$output" | jq -e 'type == "array"' >/dev/null 2>&1; then
           ALL_FINDINGS="$(echo "$ALL_FINDINGS" "$output" | jq -s '.[0] + .[1]')"
         fi
       fi
     fi
   done
 
-  # Clean up temp directory
-  rm -rf "$temp_dir"
+  # Temp directory cleaned up by EXIT trap
 }
 
 # ─── Discover scanner scripts ───────────────────────────────────────────────
