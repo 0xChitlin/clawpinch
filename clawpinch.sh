@@ -202,7 +202,14 @@ _SPINNER_PID=""
 # Record scan start time
 _scan_start="${EPOCHSECONDS:-$(date +%s)}"
 
-for scanner in "${scanners[@]}"; do
+# ─── Execute scanners (parallel or sequential) ──────────────────────────────
+
+if [[ "$PARALLEL_SCANNERS" -eq 1 ]]; then
+  # Parallel execution
+  run_scanners_parallel
+else
+  # Sequential execution
+  for scanner in "${scanners[@]}"; do
   scanner_idx=$((scanner_idx + 1))
   scanner_name="$(basename "$scanner")"
   scanner_base="${scanner_name%.*}"
@@ -259,7 +266,8 @@ for scanner in "${scanners[@]}"; do
   if [[ "$JSON_OUTPUT" -eq 0 ]] && [[ "$QUIET" -eq 0 ]]; then
     stop_spinner "$local_name" "$local_count" "$_scanner_elapsed"
   fi
-done
+  done
+fi
 
 # Calculate total scan time
 _scan_end="${EPOCHSECONDS:-$(date +%s)}"
