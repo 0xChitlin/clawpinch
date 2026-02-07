@@ -268,7 +268,7 @@ validate_command() {
       return 1
     fi
   else
-    if [[ -w "$resolved_file" ]] && stat -c '%a' "$resolved_file" 2>/dev/null | grep -q '[2367]$'; then
+    if stat -c '%a' "$resolved_file" 2>/dev/null | grep -q '[2367]$'; then
       log_error "validate_command: security config '$resolved_file' is world-writable. Fix with: chmod o-w '$resolved_file'"
       return 1
     fi
