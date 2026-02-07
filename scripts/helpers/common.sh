@@ -125,20 +125,11 @@ require_cmd() {
 
 validate_command() {
   # Usage: validate_command <command_string>
-  # Returns 0 if command is in allowlist, 1 otherwise
+  # Returns 0 if ALL commands in the string are in allowlist, 1 otherwise
   local cmd_string="$1"
 
   if [[ -z "$cmd_string" ]]; then
     log_error "validate_command: empty command string"
-    return 1
-  fi
-
-  # Extract base command (first token, handling pipes, &&, ||, ;)
-  local base_cmd
-  base_cmd="$(echo "$cmd_string" | sed -e 's/^[[:space:]]*//' | awk '{print $1}' | sed -e 's/[|&;].*//')"
-
-  if [[ -z "$base_cmd" ]]; then
-    log_error "validate_command: could not extract base command from '$cmd_string'"
     return 1
   fi
 
@@ -183,16 +174,63 @@ validate_command() {
     return 1
   fi
 
-  # Check if base command is in allowlist
-  while IFS= read -r allowed; do
-    if [[ "$base_cmd" == "$allowed" ]]; then
-      return 0
-    fi
-  done <<< "$allowed_commands"
+  # Extract ALL commands from the string (split by |, &&, ||, ;)
+  # This ensures we validate every command in a chain
+  # Try to use Python script for proper quote-aware parsing
+  local script_dir
+  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  local parse_script="$script_dir/parse_commands.py"
 
-  # Not found in allowlist
-  log_error "validate_command: '$base_cmd' is not in the allowlist"
-  return 1
+  local base_commands_list
+  if [[ -f "$parse_script" ]] && has_cmd python3; then
+    # Use Python parser - it returns base commands directly
+    base_commands_list="$(python3 "$parse_script" "$cmd_string" 2>/dev/null)"
+    if [[ $? -ne 0 || -z "$base_commands_list" ]]; then
+      # Python failed, fall back to simple parsing
+      base_commands_list="$(echo "$cmd_string" | sed -e 's/[|]/\n/g' -e 's/&&/\n/g' -e 's/||/\n/g' -e 's/;/\n/g' | awk '{print $1}')"
+    fi
+  else
+    # Fallback to simple sed-based splitting (may be overly restrictive with quoted pipes)
+    base_commands_list="$(echo "$cmd_string" | sed -e 's/[|]/\n/g' -e 's/&&/\n/g' -e 's/||/\n/g' -e 's/;/\n/g' | awk '{print $1}')"
+  fi
+
+  # Check each base command
+  while IFS= read -r base_cmd; do
+    # Skip empty lines
+    [[ -z "$base_cmd" ]] && continue
+
+    # Skip flags/options (start with -)
+    [[ "$base_cmd" =~ ^- ]] && continue
+
+    # Skip quoted strings (they're arguments, not commands)
+    [[ "$base_cmd" =~ ^[\'\"] ]] && continue
+
+    # Skip paths starting with / or ./ or ~/ (they're file paths, not commands)
+    [[ "$base_cmd" =~ ^[/~\.] ]] && continue
+
+    # Skip redirection operators
+    case "$base_cmd" in
+      '>'|'>>'|'<'|'2>'|'&>'|'2>&1') continue ;;
+    esac
+
+    # Check if this command is in the allowlist
+    local found=0
+    while IFS= read -r allowed; do
+      if [[ "$base_cmd" == "$allowed" ]]; then
+        found=1
+        break
+      fi
+    done <<< "$allowed_commands"
+
+    # If any command is not in allowlist, reject the entire command string
+    if [[ $found -eq 0 ]]; then
+      log_error "validate_command: '$base_cmd' is not in the allowlist"
+      return 1
+    fi
+  done <<< "$base_commands_list"
+
+  # All commands validated successfully
+  return 0
 }
 
 # ─── OS detection ───────────────────────────────────────────────────────────
