@@ -23,7 +23,7 @@ SHOW_FIX=0
 QUIET=0
 NO_INTERACTIVE=0
 REMEDIATE=0
-PARALLEL_SCANNERS=0
+PARALLEL_SCANNERS=1
 CONFIG_DIR=""
 
 # ─── Usage ───────────────────────────────────────────────────────────────────
@@ -37,7 +37,7 @@ Options:
   --json            Output findings as JSON array only
   --fix             Show auto-fix commands in report
   --quiet           Print summary line only
-  --parallel        Run scanners in parallel for 2-3x speedup
+  --sequential      Run scanners sequentially (default is parallel)
   --no-interactive  Disable interactive post-scan menu
   --remediate       Run scan then pipe findings to Claude for AI remediation
   --config-dir PATH Explicit path to openclaw config directory
@@ -58,7 +58,7 @@ while [[ $# -gt 0 ]]; do
     --json)       JSON_OUTPUT=1; shift ;;
     --fix)        SHOW_FIX=1; shift ;;
     --quiet)      QUIET=1; shift ;;
-    --parallel)   PARALLEL_SCANNERS=1; shift ;;
+    --sequential) PARALLEL_SCANNERS=0; shift ;;
     --no-interactive) NO_INTERACTIVE=1; shift ;;
     --remediate)  REMEDIATE=1; NO_INTERACTIVE=1; shift ;;
     --config-dir)
