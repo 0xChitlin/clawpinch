@@ -357,8 +357,44 @@ fi
 
 # ─── Exit code ───────────────────────────────────────────────────────────────
 
+# Exit 3 if scan had errors
+if (( SCAN_HAD_ERRORS > 0 )); then
+  exit 3
+fi
+
+# Exit 1 if critical findings exist (always, regardless of threshold)
 if (( count_critical > 0 )); then
   exit 1
-else
-  exit 0
 fi
+
+# Apply severity threshold logic for non-critical findings
+if [[ -n "$SEVERITY_THRESHOLD" ]]; then
+  # Exit 2 if we have warn findings and threshold is warn or lower
+  if [[ "$SEVERITY_THRESHOLD" == "warn" || "$SEVERITY_THRESHOLD" == "info" || "$SEVERITY_THRESHOLD" == "ok" ]]; then
+    if (( count_warn > 0 )); then
+      exit 2
+    fi
+  fi
+
+  # Exit 2 if we have info findings and threshold is info or lower
+  if [[ "$SEVERITY_THRESHOLD" == "info" || "$SEVERITY_THRESHOLD" == "ok" ]]; then
+    if (( count_info > 0 )); then
+      exit 2
+    fi
+  fi
+
+  # Exit 2 if we have ok findings and threshold is ok
+  if [[ "$SEVERITY_THRESHOLD" == "ok" ]]; then
+    if (( count_ok > 0 )); then
+      exit 2
+    fi
+  fi
+else
+  # Default behavior when no threshold specified: treat warn as threshold
+  if (( count_warn > 0 )); then
+    exit 2
+  fi
+fi
+
+# No findings above threshold
+exit 0
