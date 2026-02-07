@@ -14,6 +14,7 @@ source "$HELPERS_DIR/common.sh"
 source "$HELPERS_DIR/report.sh"
 source "$HELPERS_DIR/redact.sh"
 source "$HELPERS_DIR/interactive.sh"
+source "$HELPERS_DIR/sarif.sh"
 
 # ─── Signal trap for animation cleanup ──────────────────────────────────────
 
@@ -135,7 +136,7 @@ export OPENCLAW_CONFIG
 
 # ─── Banner ──────────────────────────────────────────────────────────────────
 
-if [[ "$JSON_OUTPUT" -eq 0 ]] && [[ "$QUIET" -eq 0 ]]; then
+if [[ "$JSON_OUTPUT" -eq 0 ]] && [[ "$SARIF_OUTPUT" -eq 0 ]] && [[ "$QUIET" -eq 0 ]]; then
   print_header_animated
   log_info "OS detected: $CLAWPINCH_OS"
   if [[ -n "$OPENCLAW_CONFIG" ]]; then
@@ -273,7 +274,7 @@ else
   # Record scanner start time
   _scanner_start="${EPOCHSECONDS:-$(date +%s)}"
 
-  if [[ "$JSON_OUTPUT" -eq 0 ]] && [[ "$QUIET" -eq 0 ]]; then
+  if [[ "$JSON_OUTPUT" -eq 0 ]] && [[ "$SARIF_OUTPUT" -eq 0 ]] && [[ "$QUIET" -eq 0 ]]; then
     # Print section header for this scanner
     print_section_header "$scanner_name"
 
@@ -294,7 +295,7 @@ else
     elif has_cmd python; then
       output="$(python "$scanner" 2>/dev/null)" || true
     else
-      if [[ "$JSON_OUTPUT" -eq 0 ]] && [[ "$QUIET" -eq 0 ]]; then
+      if [[ "$JSON_OUTPUT" -eq 0 ]] && [[ "$SARIF_OUTPUT" -eq 0 ]] && [[ "$QUIET" -eq 0 ]]; then
         stop_spinner "$local_name" 0 0
       fi
       log_warn "Skipping $scanner_name (python not found)"
@@ -319,7 +320,7 @@ else
   _scanner_end="${EPOCHSECONDS:-$(date +%s)}"
   _scanner_elapsed=$(( _scanner_end - _scanner_start ))
 
-  if [[ "$JSON_OUTPUT" -eq 0 ]] && [[ "$QUIET" -eq 0 ]]; then
+  if [[ "$JSON_OUTPUT" -eq 0 ]] && [[ "$SARIF_OUTPUT" -eq 0 ]] && [[ "$QUIET" -eq 0 ]]; then
     stop_spinner "$local_name" "$local_count" "$_scanner_elapsed"
   fi
   done
@@ -329,7 +330,7 @@ fi
 _scan_end="${EPOCHSECONDS:-$(date +%s)}"
 _scan_elapsed=$(( _scan_end - _scan_start ))
 
-if [[ "$JSON_OUTPUT" -eq 0 ]] && [[ "$QUIET" -eq 0 ]]; then
+if [[ "$JSON_OUTPUT" -eq 0 ]] && [[ "$SARIF_OUTPUT" -eq 0 ]] && [[ "$QUIET" -eq 0 ]]; then
   printf '\n'
 fi
 
@@ -356,7 +357,10 @@ count_ok="$(echo "$SORTED_FINDINGS"       | jq '[.[] | select(.severity == "ok")
 
 # ─── Output ──────────────────────────────────────────────────────────────────
 
-if [[ "$JSON_OUTPUT" -eq 1 ]]; then
+if [[ "$SARIF_OUTPUT" -eq 1 ]]; then
+  # SARIF v2.1.0 output (for GitHub Code Scanning, etc.)
+  convert_to_sarif "$SORTED_FINDINGS"
+elif [[ "$JSON_OUTPUT" -eq 1 ]]; then
   # Pure JSON output (compact for piping efficiency)
   echo "$SORTED_FINDINGS" | jq -c .
 else
