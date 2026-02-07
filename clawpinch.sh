@@ -171,6 +171,7 @@ ALL_FINDINGS="[]"
 scanner_count=${#scanners[@]}
 scanner_idx=0
 _SPINNER_PID=""
+SCAN_HAD_ERRORS=0
 
 # Record scan start time
 _scan_start="${EPOCHSECONDS:-$(date +%s)}"
@@ -208,6 +209,7 @@ for scanner in "${scanners[@]}"; do
         stop_spinner "$local_name" 0 0
       fi
       log_warn "Skipping $scanner_name (python not found)"
+      SCAN_HAD_ERRORS=1
       continue
     fi
   fi
@@ -222,6 +224,7 @@ for scanner in "${scanners[@]}"; do
       ALL_FINDINGS="$(echo "$ALL_FINDINGS" "$output" | jq -s '.[0] + .[1]')"
     else
       log_warn "Scanner $scanner_name did not produce a valid JSON array"
+      SCAN_HAD_ERRORS=1
     fi
   fi
 
