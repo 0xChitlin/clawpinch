@@ -28,6 +28,7 @@ QUIET=0
 NO_INTERACTIVE=0
 REMEDIATE=0
 CONFIG_DIR=""
+SEVERITY_THRESHOLD=""
 
 # ─── Usage ───────────────────────────────────────────────────────────────────
 
@@ -36,14 +37,15 @@ usage() {
 Usage: clawpinch [OPTIONS]
 
 Options:
-  --deep            Run thorough / deep scans
-  --json            Output findings as JSON array only
-  --fix             Show auto-fix commands in report
-  --quiet           Print summary line only
-  --no-interactive  Disable interactive post-scan menu
-  --remediate       Run scan then pipe findings to Claude for AI remediation
-  --config-dir PATH Explicit path to openclaw config directory
-  -h, --help        Show this help message
+  --deep                        Run thorough / deep scans
+  --json                        Output findings as JSON array only
+  --fix                         Show auto-fix commands in report
+  --quiet                       Print summary line only
+  --no-interactive              Disable interactive post-scan menu
+  --remediate                   Run scan then pipe findings to Claude for AI remediation
+  --config-dir PATH             Explicit path to openclaw config directory
+  --severity-threshold LEVEL    Minimum severity to trigger non-zero exit (critical|warn|info|ok)
+  -h, --help                    Show this help message
 
 Exit codes:
   0   No critical findings
@@ -68,6 +70,19 @@ while [[ $# -gt 0 ]]; do
         exit 2
       fi
       CONFIG_DIR="$2"; shift 2 ;;
+    --severity-threshold)
+      if [[ -z "${2:-}" ]]; then
+        log_error "--severity-threshold requires a severity level argument"
+        exit 2
+      fi
+      case "$2" in
+        critical|warn|info|ok)
+          SEVERITY_THRESHOLD="$2" ;;
+        *)
+          log_error "--severity-threshold must be one of: critical, warn, info, ok"
+          exit 2 ;;
+      esac
+      shift 2 ;;
     -h|--help)    usage ;;
     -v|--version)
       node -e "console.log('clawpinch v' + require('$CLAWPINCH_DIR/package.json').version)" 2>/dev/null \
@@ -83,6 +98,7 @@ done
 export CLAWPINCH_DEEP="$DEEP"
 export CLAWPINCH_SHOW_FIX="$SHOW_FIX"
 export CLAWPINCH_CONFIG_DIR="$CONFIG_DIR"
+export CLAWPINCH_SEVERITY_THRESHOLD="$SEVERITY_THRESHOLD"
 export QUIET
 
 # ─── Detect OS ───────────────────────────────────────────────────────────────
