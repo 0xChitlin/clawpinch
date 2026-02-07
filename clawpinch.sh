@@ -29,6 +29,7 @@ NO_INTERACTIVE=0
 REMEDIATE=0
 CONFIG_DIR=""
 SEVERITY_THRESHOLD=""
+FAIL_ON_CHECKS=""
 
 # ─── Usage ───────────────────────────────────────────────────────────────────
 
@@ -45,6 +46,7 @@ Options:
   --remediate                   Run scan then pipe findings to Claude for AI remediation
   --config-dir PATH             Explicit path to openclaw config directory
   --severity-threshold LEVEL    Minimum severity to trigger non-zero exit (critical|warn|info|ok)
+  --fail-on CHECK_IDS           Comma-separated list of check IDs to fail on
   -h, --help                    Show this help message
 
 Exit codes:
@@ -83,6 +85,12 @@ while [[ $# -gt 0 ]]; do
           exit 2 ;;
       esac
       shift 2 ;;
+    --fail-on)
+      if [[ -z "${2:-}" ]]; then
+        log_error "--fail-on requires a comma-separated list of check IDs"
+        exit 2
+      fi
+      FAIL_ON_CHECKS="$2"; shift 2 ;;
     -h|--help)    usage ;;
     -v|--version)
       node -e "console.log('clawpinch v' + require('$CLAWPINCH_DIR/package.json').version)" 2>/dev/null \
@@ -99,6 +107,7 @@ export CLAWPINCH_DEEP="$DEEP"
 export CLAWPINCH_SHOW_FIX="$SHOW_FIX"
 export CLAWPINCH_CONFIG_DIR="$CONFIG_DIR"
 export CLAWPINCH_SEVERITY_THRESHOLD="$SEVERITY_THRESHOLD"
+export CLAWPINCH_FAIL_ON_CHECKS="$FAIL_ON_CHECKS"
 export QUIET
 
 # ─── Detect OS ───────────────────────────────────────────────────────────────

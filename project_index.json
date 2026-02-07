@@ -1,0 +1,26 @@
+{
+  "project_type": "single",
+  "services": {
+    "clawpinch": {
+      "path": ".",
+      "tech_stack": ["bash", "shell", "jq", "python3"],
+      "port": null,
+      "dev_command": "./clawpinch.sh",
+      "test_command": "bash scripts/helpers/test_e2e.sh"
+    }
+  },
+  "infrastructure": {
+    "docker": false,
+    "database": null,
+    "ci_cd": "none"
+  },
+  "conventions": {
+    "linter": null,
+    "formatter": null,
+    "testing": "bash test scripts",
+    "exit_codes": {
+      "current": "0=success, 1=critical findings, 2=errors",
+      "target": "0=clean, 1=critical, 2=warnings, 3=scan error"
+    }
+  }
+}
