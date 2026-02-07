@@ -38,6 +38,13 @@ _confirm() {
 
 _run_fix() {
   local cmd="$1"
+
+  # Validate command against allowlist
+  if ! validate_command "$cmd"; then
+    printf '\n  %b✗ Command not in allowlist: %s%b\n' "$_CLR_CRIT" "$cmd" "$_CLR_RST"
+    return 1
+  fi
+
   printf '\n  %b$%b %s\n' "$_CLR_DIM" "$_CLR_RST" "$cmd"
   if eval "$cmd" 2>&1 | while IFS= read -r line; do printf '  %s\n' "$line"; done; then
     printf '  %b✓ Fix applied successfully%b\n' "$_CLR_OK" "$_CLR_RST"
