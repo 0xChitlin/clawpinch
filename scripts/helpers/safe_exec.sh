@@ -34,8 +34,10 @@ set -euo pipefail
 # define a finite set of allowed command structures. Each pattern is a regex
 # that matches a specific, safe operation. For example:
 #
-#   Pattern:  ^jq [^|;&$`><]+\.json > tmp && mv tmp [a-zA-Z0-9/._-]+\.json$
-#   Matches:  jq '.auth=true' config.json > tmp && mv tmp config.json
+#   Pattern:  ^jq '\.path = value' file.json > tmp && mv tmp file.json$
+#   Matches:  jq '.auth = true' config.json > tmp && mv tmp config.json
+#   Rejects:  jq 'del(.)' config.json > tmp       (destructive filter)
+#   Rejects:  jq '.[] | @base64' config.json > tmp (data exfiltration)
 #   Rejects:  jq '.auth=true' config.json | sh    (pipe to shell)
 #   Rejects:  jq '.auth=true'; rm -rf /           (command injection)
 #
@@ -131,26 +133,29 @@ set -euo pipefail
 # Patterns are checked in order — first match wins.
 
 declare -a _SAFE_EXEC_PATTERNS=(
-  # jq JSON modification with output to temp file + mv
+  # jq JSON modification with output to temp file + mv (assignment only)
   # Example: jq '.gateway.bindAddress = "127.0.0.1:3000"' openclaw.json > tmp && mv tmp openclaw.json
-  # Note: [^|;&$`><] excludes redirection chars to prevent injection like "jq .>/etc/passwd ..."
-  '^jq [^|;&$`><]+[a-zA-Z0-9/._-]+\.json > tmp && mv tmp [a-zA-Z0-9/._-]+\.json$'
+  # Restricted to assignment operations only — blocks del(), @base64, and other arbitrary filters
+  # Filter must be single-quoted and match: .path = value
+  '^jq '\''\.[-a-zA-Z0-9._]+[[:space:]]*=[[:space:]]*[a-zA-Z0-9 ".:,/_-]*'\'' [a-zA-Z0-9/._-]+\.json > tmp && mv tmp [a-zA-Z0-9/._-]+\.json$'
 
-  # jq JSON modification to temp file (without mv in same command)
+  # jq JSON modification to temp file (assignment only, without mv in same command)
   # Example: jq '.gateway.requireAuth = true' config.json > tmp
-  '^jq [^|;&$`><]+[a-zA-Z0-9/._-]+\.json > tmp$'
+  '^jq '\''\.[-a-zA-Z0-9._]+[[:space:]]*=[[:space:]]*[a-zA-Z0-9 ".:,/_-]*'\'' [a-zA-Z0-9/._-]+\.json > tmp$'
 
-  # mv command for file rename (used after jq, or for backup restore, etc.)
+  # mv command for file rename (used after jq, or for backup restore)
+  # Destination restricted to .json files to prevent overwriting executables
   # Example: mv tmp openclaw.json  OR  mv config.json.bak config.json
-  '^mv [a-zA-Z0-9/._-]+ [a-zA-Z0-9/._-]+$'
+  '^mv [a-zA-Z0-9/._-]+ [a-zA-Z0-9/._-]+\.json$'
 
   # chmod for permission fixes (numeric mode only, specific files)
   # Example: chmod 600 /path/to/openclaw.json
   '^chmod [0-7]{3,4} [a-zA-Z0-9/._-]+$'
 
   # sed in-place edit (specific file, no pipes or dangerous chars)
-  # Example: sed -i 's/foo/bar/' file.conf  OR  sed -i 's/foo//g' file.conf
-  '^sed -i[^ ]* '\''s/[^'\'']+/[^'\'']*/g?'\'' [a-zA-Z0-9/._-]+$'
+  # Non-empty replacement required to prevent accidental config value deletion
+  # Example: sed -i 's/foo/bar/' file.conf  OR  sed -i 's/foo/bar/g' file.conf
+  '^sed -i[^ ]* '\''s/[^'\'']+/[^'\'']+/g?'\'' [a-zA-Z0-9/._-]+$'
 
   # cp with specific source and destination (no wildcards)
   # Example: cp config.json config.json.bak
@@ -208,6 +213,10 @@ declare -a _DANGEROUS_PATTERNS=(
   # Environment variable expansion (all forms: $VAR, $var, ${VAR})
   '\$[a-zA-Z_][a-zA-Z0-9_]*'
 
+  # Special shell variables ($$, $?, $0-$9)
+  '\$[0-9]'
+  '\$\$'
+
   # Shell special characters
   '~'           # home directory expansion
   '#'           # comment (can hide commands)
@@ -257,16 +266,15 @@ _validate_command() {
   # Step 1: Check for dangerous patterns first (blacklist)
   for pattern in "${_DANGEROUS_PATTERNS[@]}"; do
     if [[ "$cmd" =~ $pattern ]]; then
-      # Special case: allow '&&' only in the whitelisted `jq ... > tmp && mv tmp ...` pattern.
-      # This check is intentionally loose (it allows '&&' in any jq command) because the
-      # stricter whitelist pattern in Step 2 will enforce the full, safe command structure.
-      # This just prevents the blacklist from prematurely rejecting a valid jq+mv command.
-      if [[ "$pattern" == '&&' ]] && [[ "$cmd" =~ ^jq[[:space:]] ]]; then
+      # Special case: allow '&&' only in jq commands that match the full safe structure:
+      #   jq '<filter>' <file>.json > tmp && mv tmp <file>.json
+      # We validate the full pattern here (not just "starts with jq") to prevent
+      # invalid jq commands with '&&' from slipping past the blacklist.
+      if [[ "$pattern" == '&&' ]] && [[ "$cmd" =~ ^jq[[:space:]].*\>\ tmp\ \&\&\ mv\ tmp\ [a-zA-Z0-9/._-]+\.json$ ]]; then
         continue
       fi
-      # Special case: allow '&' if it's part of '&&' in jq commands, preventing a false
-      # positive from the single '&' blacklist entry matching the '&&' operator above.
-      if [[ "$pattern" == '&' ]] && [[ "$cmd" =~ '&&' ]] && [[ "$cmd" =~ ^jq[[:space:]] ]]; then
+      # Special case: allow '&' only when it's part of the safe '&&' jq+mv pattern above.
+      if [[ "$pattern" == '&' ]] && [[ "$cmd" =~ ^jq[[:space:]].*\>\ tmp\ \&\&\ mv\ tmp\ [a-zA-Z0-9/._-]+\.json$ ]]; then
         continue
       fi
       _safe_exec_log error "Command rejected: contains dangerous pattern '$pattern'"
