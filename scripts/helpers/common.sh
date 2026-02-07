@@ -121,6 +121,80 @@ require_cmd() {
   fi
 }
 
+# ─── Command validation (allowlist) ─────────────────────────────────────────
+
+validate_command() {
+  # Usage: validate_command <command_string>
+  # Returns 0 if command is in allowlist, 1 otherwise
+  local cmd_string="$1"
+
+  if [[ -z "$cmd_string" ]]; then
+    log_error "validate_command: empty command string"
+    return 1
+  fi
+
+  # Extract base command (first token, handling pipes, &&, ||, ;)
+  local base_cmd
+  base_cmd="$(echo "$cmd_string" | sed -e 's/^[[:space:]]*//' | awk '{print $1}' | sed -e 's/[|&;].*//')"
+
+  if [[ -z "$base_cmd" ]]; then
+    log_error "validate_command: could not extract base command from '$cmd_string'"
+    return 1
+  fi
+
+  # Find security config file
+  local security_file=""
+  local search_dirs=(
+    "$(pwd)"
+    "$(dirname "$(pwd)")"
+    "$(dirname "$(dirname "$(pwd)")")"
+  )
+
+  for dir in "${search_dirs[@]}"; do
+    if [[ -f "$dir/.auto-claude-security.json" ]]; then
+      security_file="$dir/.auto-claude-security.json"
+      break
+    fi
+  done
+
+  if [[ -z "$security_file" ]]; then
+    log_error "validate_command: .auto-claude-security.json not found"
+    return 1
+  fi
+
+  # Check if jq is available
+  if ! has_cmd jq; then
+    log_error "validate_command: jq is required but not installed"
+    return 1
+  fi
+
+  # Get all allowed commands from security config
+  local allowed_commands
+  allowed_commands="$(jq -r '
+    (.base_commands // []) +
+    (.stack_commands // []) +
+    (.script_commands // []) +
+    (.custom_commands // []) |
+    .[]
+  ' "$security_file" 2>/dev/null)"
+
+  if [[ -z "$allowed_commands" ]]; then
+    log_error "validate_command: failed to parse security config"
+    return 1
+  fi
+
+  # Check if base command is in allowlist
+  while IFS= read -r allowed; do
+    if [[ "$base_cmd" == "$allowed" ]]; then
+      return 0
+    fi
+  done <<< "$allowed_commands"
+
+  # Not found in allowlist
+  log_error "validate_command: '$base_cmd' is not in the allowlist"
+  return 1
+}
+
 # ─── OS detection ───────────────────────────────────────────────────────────
 
 detect_os() {
