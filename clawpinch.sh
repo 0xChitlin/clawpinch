@@ -206,7 +206,25 @@ _scan_start="${EPOCHSECONDS:-$(date +%s)}"
 
 if [[ "$PARALLEL_SCANNERS" -eq 1 ]]; then
   # Parallel execution
+  if [[ "$JSON_OUTPUT" -eq 0 ]] && [[ "$QUIET" -eq 0 ]]; then
+    start_spinner "Running ${scanner_count} scanners in parallel..."
+  fi
+
+  # Record parallel execution start time
+  _parallel_start="${EPOCHSECONDS:-$(date +%s)}"
+
   run_scanners_parallel
+
+  # Calculate parallel execution elapsed time
+  _parallel_end="${EPOCHSECONDS:-$(date +%s)}"
+  _parallel_elapsed=$(( _parallel_end - _parallel_start ))
+
+  # Count findings from merged results
+  _parallel_count="$(echo "$ALL_FINDINGS" | jq 'length')"
+
+  if [[ "$JSON_OUTPUT" -eq 0 ]] && [[ "$QUIET" -eq 0 ]]; then
+    stop_spinner "Parallel scan" "$_parallel_count" "$_parallel_elapsed"
+  fi
 else
   # Sequential execution
   for scanner in "${scanners[@]}"; do
