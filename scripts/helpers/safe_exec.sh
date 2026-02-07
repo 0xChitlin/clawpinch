@@ -100,7 +100,7 @@ set -euo pipefail
 #
 # 1. Add a pattern to _SAFE_EXEC_PATTERNS array
 #    • Use anchors (^ and $) to match the entire command
-#    • Use character class negation [^|;&$`] to block shell metacharacters
+#    • Use strict character class [a-zA-Z0-9/._-]+ for file paths
 #    • Add inline comments with examples
 #
 # 2. Add validation in _validate_command()
@@ -133,31 +133,31 @@ set -euo pipefail
 declare -a _SAFE_EXEC_PATTERNS=(
   # jq JSON modification with output to temp file + mv
   # Example: jq '.gateway.bindAddress = "127.0.0.1:3000"' openclaw.json > tmp && mv tmp openclaw.json
-  '^jq [^|;&$`]+\.json > tmp && mv tmp [^|;&$`]+\.json$'
+  '^jq [^|;&$`]+[a-zA-Z0-9/._-]+\.json > tmp && mv tmp [a-zA-Z0-9/._-]+\.json$'
 
   # jq JSON modification to temp file (without mv in same command)
   # Example: jq '.gateway.requireAuth = true' config.json > tmp
-  '^jq [^|;&$`]+\.json > tmp$'
+  '^jq [^|;&$`]+[a-zA-Z0-9/._-]+\.json > tmp$'
 
   # mv command for file rename (typically used after jq)
   # Example: mv tmp openclaw.json
-  '^mv tmp [^|;&$`]+\.json$'
+  '^mv tmp [a-zA-Z0-9/._-]+\.json$'
 
   # chmod for permission fixes (numeric mode only, specific files)
   # Example: chmod 600 /path/to/openclaw.json
-  '^chmod [0-7]{3,4} [^|;&$`]+$'
+  '^chmod [0-7]{3,4} [a-zA-Z0-9/._-]+$'
 
   # sed in-place edit (specific file, no pipes or dangerous chars)
   # Example: sed -i 's/foo/bar/' file.conf
-  '^sed -i[^ ]* '\''s/[^'\'']+/[^'\'']+/'\'' [^|;&$`]+$'
+  '^sed -i[^ ]* '\''s/[^'\'']+/[^'\'']+/'\'' [a-zA-Z0-9/._-]+$'
 
   # cp with specific source and destination (no wildcards)
   # Example: cp config.json config.json.bak
-  '^cp [^|;&$`*?]+\.[^|;&$`*?]+ [^|;&$`*?]+\.[^|;&$`*?]+$'
+  '^cp [a-zA-Z0-9/._-]+ [a-zA-Z0-9/._-]+$'
 
   # rm single file (no wildcards, no directories, no -rf)
   # Example: rm /tmp/clawpinch-temp.json
-  '^rm [^|;&$`*?]+\.[^|;&$`*?]+$'
+  '^rm [a-zA-Z0-9/._-]+$'
 )
 
 # ─── Dangerous pattern detection ────────────────────────────────────────────
@@ -172,6 +172,8 @@ declare -a _DANGEROUS_PATTERNS=(
   '&'           # background execution
   '\$\('        # command substitution
   '`'           # command substitution (backticks)
+  '\('          # process substitution / subshell
+  '\)'          # process substitution / subshell
 
   # Redirection to dangerous targets
   '> */dev/'    # writing to device files
@@ -194,6 +196,9 @@ declare -a _DANGEROUS_PATTERNS=(
   '\*'
   '\?'
   '\['
+
+  # Path traversal
+  '\.\.'        # directory traversal
 
   # Environment variable expansion (except in quotes)
   '\$[A-Z_][A-Z0-9_]*'
@@ -278,7 +283,7 @@ _validate_command() {
 
   # Extract command name (first word)
   local cmd_name
-  cmd_name="$(echo "$cmd" | awk '{print $1}')"
+  read -r cmd_name _ <<< "$cmd"
 
   case "$cmd_name" in
     jq)
@@ -345,12 +350,7 @@ _validate_command() {
       ;;
 
     cp|rm)
-      # File operations must have explicit paths (no wildcards already checked)
-      # Additional validation for specific file extensions
-      if [[ ! "$cmd" =~ \.[a-zA-Z0-9]+([[:space:]]|$) ]]; then
-        _safe_exec_log error "$cmd_name command rejected: file must have extension"
-        return 1
-      fi
+      # Whitelist patterns already enforce strict [a-zA-Z0-9/._-]+ for paths
       ;;
 
     *)
