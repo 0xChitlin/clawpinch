@@ -140,17 +140,17 @@ declare -a _SAFE_EXEC_PATTERNS=(
   # Example: jq '.gateway.requireAuth = true' config.json > tmp
   '^jq [^|;&$`><]+[a-zA-Z0-9/._-]+\.json > tmp$'
 
-  # mv command for file rename (typically used after jq)
-  # Example: mv tmp openclaw.json
-  '^mv tmp [a-zA-Z0-9/._-]+\.json$'
+  # mv command for file rename (used after jq, or for backup restore, etc.)
+  # Example: mv tmp openclaw.json  OR  mv config.json.bak config.json
+  '^mv [a-zA-Z0-9/._-]+ [a-zA-Z0-9/._-]+$'
 
   # chmod for permission fixes (numeric mode only, specific files)
   # Example: chmod 600 /path/to/openclaw.json
   '^chmod [0-7]{3,4} [a-zA-Z0-9/._-]+$'
 
   # sed in-place edit (specific file, no pipes or dangerous chars)
-  # Example: sed -i 's/foo/bar/' file.conf
-  '^sed -i[^ ]* '\''s/[^'\'']+/[^'\'']+/'\'' [a-zA-Z0-9/._-]+$'
+  # Example: sed -i 's/foo/bar/' file.conf  OR  sed -i 's/foo//g' file.conf
+  '^sed -i[^ ]* '\''s/[^'\'']+/[^'\'']*/g?'\'' [a-zA-Z0-9/._-]+$'
 
   # cp with specific source and destination (no wildcards)
   # Example: cp config.json config.json.bak
@@ -194,10 +194,13 @@ declare -a _DANGEROUS_PATTERNS=(
   # File descriptor manipulation
   '[0-9]>&[0-9]'
 
-  # Wildcards (glob expansion can be dangerous)
+  # Wildcards and glob/brace expansion
   '\*'
   '\?'
   '\['
+  '\]'
+  '\{'
+  '\}'
 
   # Path traversal
   '\.\.'        # directory traversal
@@ -328,12 +331,6 @@ _validate_command() {
       ;;
 
     mv)
-      # Validate mv source is 'tmp'
-      if [[ ! "$cmd" =~ ^mv[[:space:]]+tmp[[:space:]] ]]; then
-        _safe_exec_log error "mv command rejected: source must be 'tmp'"
-        return 1
-      fi
-
       # Disallow mv flags that could be dangerous
       if [[ "$cmd" =~ mv[[:space:]]+-[^[:space:]] ]]; then
         _safe_exec_log error "mv command rejected: flags not allowed"
