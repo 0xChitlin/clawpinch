@@ -202,6 +202,92 @@ bash clawpinch.sh --config-dir /path/to/openclaw/config
 
 # Print auto-fix commands (read-only -- does not execute them)
 bash clawpinch.sh --fix
+
+# CI/CD gate modes -- fail only on critical findings
+bash clawpinch.sh --severity-threshold critical
+
+# Fail only on specific checks
+bash clawpinch.sh --fail-on CHK-CFG-001,CHK-SEC-002
+
+# Combine threshold and specific checks
+bash clawpinch.sh --severity-threshold warn --fail-on CHK-NET-005
+```
+
+---
+
+## Exit Codes
+
+ClawPinch provides granular exit codes for CI/CD pipeline integration:
+
+| Exit Code | Meaning | Description |
+|-----------|---------|-------------|
+| `0` | Success | No findings above the severity threshold |
+| `1` | Critical | Critical findings detected |
+| `2` | Warning | Warning-level findings detected (no critical) |
+| `3` | Error | Scan error or incomplete execution |
+
+### Severity Threshold
+
+Use `--severity-threshold` to control which findings trigger non-zero exit codes:
+
+```bash
+# Fail only on critical findings (exit 1) -- warnings and info are ignored
+bash clawpinch.sh --severity-threshold critical
+
+# Fail on warnings or critical (exit 1 or 2) -- info findings are ignored
+bash clawpinch.sh --severity-threshold warn
+
+# Fail on any findings including info (default behavior)
+bash clawpinch.sh --severity-threshold info
+```
+
+**Use cases:**
+- **Production deployments:** `--severity-threshold critical` blocks only on critical vulnerabilities
+- **Staging environments:** `--severity-threshold warn` catches warnings before production
+- **Development:** `--severity-threshold info` enforces all best practices
+
+### Fail on Specific Checks
+
+Use `--fail-on` to enforce specific checks as mandatory regardless of severity threshold:
+
+```bash
+# Always fail if auth is not required (even with --severity-threshold critical)
+bash clawpinch.sh --severity-threshold critical --fail-on CHK-CFG-001
+
+# Fail on multiple specific checks (comma-separated)
+bash clawpinch.sh --fail-on CHK-CFG-001,CHK-SEC-002,CHK-NET-005
+```
+
+**Use cases:**
+- Enforce organization-specific security policies
+- Make specific checks mandatory for compliance
+- Gradually tighten security gates over time
+
+### CI/CD Integration Examples
+
+**GitHub Actions:**
+```yaml
+- name: Security audit
+  run: npx clawpinch --json --severity-threshold critical
+  # Fails workflow only on critical findings (exit 1)
+```
+
+**GitLab CI:**
+```yaml
+security_audit:
+  script:
+    - npx clawpinch --severity-threshold warn --fail-on CHK-CFG-001
+  # Fails on warnings or if auth check fails
+```
+
+**Jenkins:**
+```groovy
+stage('Security Scan') {
+  steps {
+    sh 'npx clawpinch --json --severity-threshold critical'
+    // Pipeline fails only on critical findings
+  }
+}
 ```
 
 ---
