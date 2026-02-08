@@ -272,10 +272,10 @@ test_exit_code_1_critical() {
   fi
 }
 
-# ─── Test: Exit Code 2 - Warning Findings (Default) ──────────────────────────
+# ─── Test: Default Behavior Backward Compatibility ───────────────────────────
 
-test_exit_code_2_warnings_default() {
-  log_info "Test 4: Exit code 2 - warning findings (default threshold)"
+test_default_backward_compatibility() {
+  log_info "Test 4: Default behavior backward compatibility (warnings exit 0)"
 
   # Prepare for test
   prepare_test
@@ -283,7 +283,7 @@ test_exit_code_2_warnings_default() {
   # Create a scanner with only warnings
   create_mock_scanner "warn_default" '[
     {
-      "id": "CHK-CFG-002",
+      "id": "CHK-BC-001",
       "severity": "warn",
       "title": "Warning finding",
       "description": "Warning",
@@ -293,15 +293,16 @@ test_exit_code_2_warnings_default() {
     }
   ]'
 
-  # Run clawpinch without threshold (default treats warn as threshold)
+  # Run WITHOUT any flags (default behavior) - should maintain backward compatibility
+  # Original behavior: only critical findings cause non-zero exit
   local exit_code
   exit_code="$(run_clawpinch_with_exit_code "")"
 
-  if [[ "$exit_code" -eq 2 ]]; then
-    assert_pass "Exit code 2 for warnings with default threshold"
+  if [[ "$exit_code" -eq 0 ]]; then
+    assert_pass "Default behavior exits 0 for warnings (backward compatible)"
     return 0
   else
-    assert_fail "Exit code 2 warnings default" "Expected exit code 2, got $exit_code"
+    assert_fail "Default backward compatibility" "Expected exit code 0, got $exit_code (breaks backward compatibility)"
     return 1
   fi
 }
@@ -705,7 +706,7 @@ main() {
   test_exit_code_0_clean
   test_exit_code_0_below_threshold
   test_exit_code_1_critical
-  test_exit_code_2_warnings_default
+  test_default_backward_compatibility
   test_exit_code_2_warnings_explicit
   test_exit_code_2_info
   test_exit_code_0_info_below_threshold

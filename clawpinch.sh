@@ -390,10 +390,10 @@ if [[ -n "$SEVERITY_THRESHOLD" ]]; then
     fi
   fi
 else
-  # Default behavior when no threshold specified: treat warn as threshold
-  if (( count_warn > 0 )); then
-    exit 2
-  fi
+  # Default behavior when no threshold specified: maintain backward compatibility
+  # Original behavior: only critical findings cause non-zero exit (exit 1 handled above)
+  # Users who want warnings to fail must explicitly use --severity-threshold warn
+  exit 0
 fi
 
 # No findings above threshold
