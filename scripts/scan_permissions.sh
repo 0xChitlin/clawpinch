@@ -669,12 +669,22 @@ check_ssh_keys() {
     [[ -z "$perms" ]] && continue
 
     if [[ "$perms" != "600" ]]; then
+      # Validate filename contains only safe characters before using in auto_fix.
+      # The safe_exec whitelist pattern for chmod requires paths matching
+      # [a-zA-Z0-9/._-]+, so we must not emit auto_fix for filenames with
+      # characters outside that set (e.g., spaces, quotes, shell metacharacters).
+      # Standard SSH key names (id_rsa, id_ed25519, *.pem) always pass this check.
+      local auto_fix_cmd="" remediation_msg="Run: chmod 600 \"$f\" (manual)"
+      if [[ "$f" =~ ^[a-zA-Z0-9/._-]+$ ]]; then
+        auto_fix_cmd="chmod 600 $f"
+        remediation_msg="Run: chmod 600 $f"
+      fi
       add_finding "CHK-PRM-013" "critical" \
         "SSH private key has insecure permissions" \
         "SSH private keys must be chmod 600 or SSH clients will refuse to use them. Current: $perms" \
         "$f mode $perms" \
-        "Run: chmod 600 $f" \
-        "chmod 600 $f"
+        "$remediation_msg" \
+        "$auto_fix_cmd"
     else
       add_finding "CHK-PRM-013" "ok" \
         "SSH private key permissions correct" \
