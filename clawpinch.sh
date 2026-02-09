@@ -119,8 +119,9 @@ run_scanners_parallel() {
   local temp_dir=""
   temp_dir="$(mktemp -d "${TMPDIR:-/tmp}/clawpinch.XXXXXX")"
 
-  # Use EXIT trap for robust cleanup — covers INT, TERM, and set -e failures
-  trap 'rm -rf "$temp_dir"' EXIT
+  # Use RETURN trap for cleanup — fires when function returns, doesn't
+  # interfere with main script's own traps or Ctrl+C handling
+  trap 'rm -rf "$temp_dir"' RETURN
 
   # Track background job PIDs
   declare -a pids=()
@@ -144,6 +145,8 @@ run_scanners_parallel() {
         # Python 3 only — scanners use f-strings and type hints that fail under Python 2
         if command -v python3 &>/dev/null; then
           python3 "$scanner" > "$temp_file" 2>/dev/null || true
+        else
+          echo "WARN: skipping $scanner_name (python3 not found)" >&2
         fi
       fi
     ) &
@@ -164,7 +167,7 @@ run_scanners_parallel() {
     ALL_FINDINGS="[]"
   fi
 
-  # Temp directory cleaned up by EXIT trap
+  # Temp directory cleaned up by RETURN trap
 }
 
 # ─── Discover scanner scripts ───────────────────────────────────────────────

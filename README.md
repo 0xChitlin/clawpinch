@@ -212,7 +212,7 @@ bash clawpinch.sh --fix
 
 ## Performance
 
-**ClawPinch runs all 8 scanner categories in parallel by default**, achieving **2-3x faster scan times** compared to sequential execution.
+**ClawPinch runs all 8 scanner categories in parallel by default**, achieving **1.5-3x faster scan times** compared to sequential execution.
 
 ### Speedup Breakdown
 
