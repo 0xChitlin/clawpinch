@@ -76,7 +76,7 @@ bash clawpinch.sh
 ## Features
 
 - **63 checks** across 8 scanner categories
-- **Parallel scanner execution** -- 2-3x faster scans by running all scanners concurrently (use `--sequential` for debugging)
+- **Parallel scanner execution** -- 1.5-3x faster scans by running all scanners concurrently (use `--sequential` for debugging)
 - **Structured JSON output** for programmatic consumption
 - **Interactive review mode** with one-by-one fix workflow
 - **Auto-fix commands** for findings that support automated remediation
@@ -180,7 +180,7 @@ In the interactive review mode, press `[a]` on any finding to copy a structured 
 
 ```bash
 # Standard interactive scan (review findings, auto-fix, export reports)
-# Runs all scanners in parallel by default for 2-3x speedup
+# Runs all scanners in parallel by default for 1.5-3x speedup
 bash clawpinch.sh
 
 # Deep scan (supply-chain hash verification, skill decompilation)
