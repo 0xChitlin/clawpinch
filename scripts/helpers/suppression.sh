@@ -57,64 +57,6 @@ load_suppressions() {
   return 0
 }
 
-# ─── Check if a finding ID is currently suppressed ──────────────────────────
-# Usage: is_suppressed <check_id>
-# Returns: 0 if suppressed and not expired, 1 otherwise
-
-is_suppressed() {
-  local check_id="$1"
-
-  # If no suppressions loaded, nothing is suppressed
-  if [[ "$_CLAWPINCH_SUPPRESSIONS" == "[]" ]]; then
-    return 1
-  fi
-
-  # Require jq
-  if ! command -v jq &>/dev/null; then
-    return 1
-  fi
-
-  # Get current timestamp in ISO 8601 format for expiration checking
-  local now
-  if command -v date &>/dev/null; then
-    if ! now="$(date -u +'%Y-%m-%dT%H:%M:%SZ' 2>/dev/null)"; then
-      now=""
-    fi
-  else
-    now=""
-  fi
-
-  # Check if the ID is in suppressions and not expired
-  local result
-  if [[ -n "$now" ]]; then
-    # With expiration checking
-    result="$(echo "$_CLAWPINCH_SUPPRESSIONS" | jq -r --arg id "$check_id" --arg now "$now" '
-      map(select(.id == $id)) |
-      if length > 0 then
-        .[0] |
-        if .expires then
-          if .expires > $now then "suppressed" else "expired" end
-        else
-          "suppressed"
-        end
-      else
-        "active"
-      end
-    ' 2>/dev/null)"
-  else
-    # Without expiration checking (no date command or failed to get timestamp)
-    result="$(echo "$_CLAWPINCH_SUPPRESSIONS" | jq -r --arg id "$check_id" '
-      if (map(select(.id == $id)) | length > 0) then
-        "suppressed"
-      else
-        "active"
-      end
-    ' 2>/dev/null)"
-  fi
-
-  [[ "$result" == "suppressed" ]]
-}
-
 # ─── Filter findings into active and suppressed arrays ──────────────────────
 # Usage: filter_findings <ignore_file> < findings.json
 # Reads findings JSON array from stdin
@@ -133,7 +75,7 @@ filter_findings() {
     # Fallback: all findings are active
     local findings
     findings="$(cat)"
-    echo "{\"active\": $findings, \"suppressed\": []}"
+    printf '{"active": %s, "suppressed": []}\n' "$findings"
     return 0
   fi
 
@@ -154,8 +96,8 @@ filter_findings() {
   # Use jq to split findings into active and suppressed
   if [[ -n "$now" ]]; then
     # With expiration checking
-    echo "$findings" | jq -c --argjson suppressions "$_CLAWPINCH_SUPPRESSIONS" --arg now "$now" '
-      ($suppressions | map({(.id): .}) | add // {}) as $smap |
+    printf '%s\n' "$findings" | jq -c --argjson suppressions "$_CLAWPINCH_SUPPRESSIONS" --arg now "$now" '
+      ($suppressions | map(select(.id != null) | {(.id): .}) | add // {}) as $smap |
       reduce .[] as $f ({active: [], suppressed: []};
         $smap[$f.id] as $s |
         if $s then
@@ -171,8 +113,8 @@ filter_findings() {
     '
   else
     # Without expiration checking (treat all as unexpired)
-    echo "$findings" | jq -c --argjson suppressions "$_CLAWPINCH_SUPPRESSIONS" '
-      ($suppressions | map({(.id): .}) | add // {}) as $smap |
+    printf '%s\n' "$findings" | jq -c --argjson suppressions "$_CLAWPINCH_SUPPRESSIONS" '
+      ($suppressions | map(select(.id != null) | {(.id): .}) | add // {}) as $smap |
       reduce .[] as $f ({active: [], suppressed: []};
         $smap[$f.id] as $s |
         if $s then
