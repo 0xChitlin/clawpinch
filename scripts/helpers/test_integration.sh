@@ -316,37 +316,41 @@ test_prm_013() {
     local ssh_dir="${TEST_DIR}/.ssh"
     mkdir -p "$ssh_dir"
 
-    # Create test SSH private keys with wrong permissions
+    # Create test SSH private keys
     local test_key="${ssh_dir}/id_test_rsa"
     local test_pem="${ssh_dir}/test.pem"
 
-    echo "-----BEGIN RSA PRIVATE KEY-----" > "$test_key"
-    echo "fake key content" >> "$test_key"
-    echo "-----END RSA PRIVATE KEY-----" >> "$test_key"
+    cat > "$test_key" <<'EOF'
+-----BEGIN RSA PRIVATE KEY-----
+fake key content
+-----END RSA PRIVATE KEY-----
+EOF
 
-    echo "-----BEGIN PRIVATE KEY-----" > "$test_pem"
-    echo "fake pem content" >> "$test_pem"
-    echo "-----END PRIVATE KEY-----" >> "$test_pem"
+    cat > "$test_pem" <<'EOF'
+-----BEGIN PRIVATE KEY-----
+fake pem content
+-----END PRIVATE KEY-----
+EOF
 
-    # Set insecure permissions
-    chmod 644 "$test_key"
-    chmod 644 "$test_pem"
+    for key_file in "$test_key" "$test_pem"; do
+        # Set insecure permissions
+        chmod 644 "$key_file"
 
-    # Run the auto-fix command
-    chmod 600 "$test_key"
-    chmod 600 "$test_pem"
+        # Run the auto-fix command
+        chmod 600 "$key_file"
 
-    # Verify permissions were fixed
-    local perms_key perms_pem
-    if [[ "$(uname -s)" == "Darwin" ]]; then
-        perms_key=$(stat -f "%Lp" "$test_key")
-        perms_pem=$(stat -f "%Lp" "$test_pem")
-    else
-        perms_key=$(stat -c "%a" "$test_key")
-        perms_pem=$(stat -c "%a" "$test_pem")
-    fi
+        # Verify permissions were fixed
+        local perms
+        if [[ "$(uname -s)" == "Darwin" ]]; then
+            perms=$(stat -f "%Lp" "$key_file")
+        else
+            perms=$(stat -c "%a" "$key_file")
+        fi
 
-    [[ "$perms_key" == "600" ]] && [[ "$perms_pem" == "600" ]]
+        if [[ "$perms" != "600" ]]; then
+            return 1
+        fi
+    done
 }
 
 # ---------------------------------------------------------------------------

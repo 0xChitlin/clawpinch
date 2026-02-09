@@ -673,8 +673,8 @@ check_ssh_keys() {
         "SSH private key has insecure permissions" \
         "SSH private keys must be chmod 600 or SSH clients will refuse to use them. Current: $perms" \
         "$f mode $perms" \
-        "Run: chmod 600 '$f'" \
-        "chmod 600 '$f'"
+        "Run: chmod 600 $f" \
+        "chmod 600 $f"
     else
       add_finding "CHK-PRM-013" "ok" \
         "SSH private key permissions correct" \
