@@ -7,6 +7,13 @@ set -euo pipefail
 # Scans for WebMCP-related misconfigurations, untrusted origins, excessive
 # capability grants, prompt injection risks, and data exfiltration vectors.
 #
+# Updated to match the real Chrome 146.0.7651.0 WebMCP API shape:
+#   - navigator.modelContext.provideContext({ tools: [...] })  (primary)
+#   - navigator.modelContext.registerTool({ name, description, inputSchema, execute })
+#   - navigator.modelContext.unregisterTool(name)
+#   - navigator.modelContext.clearContext()
+#   - Each tool requires: name, description, inputSchema, execute (callback)
+#
 # Outputs a JSON array of finding objects to stdout.
 #
 # Usage:
@@ -146,13 +153,18 @@ gather_webmcp_files() {
     # - JSON files with "webmcp", "modelContext", "services", "capabilities"
     # - YAML/YML files with similar content
     # - Browser extension manifests
+    # - JS/TS files using the Chrome 146 WebMCP API:
+    #     provideContext, registerTool, unregisterTool, clearContext
     local found_files=()
     for dir in "${search_dirs[@]}"; do
         if [[ -d "$dir" ]]; then
             while IFS= read -r -d '' f; do
                 found_files+=("$f")
             done < <(find "$dir" -maxdepth 5 \
-                \( -name "*.json" -o -name "*.yaml" -o -name "*.yml" -o -name "*.toml" -o -name "manifest.json" \) \
+                \( -name "*.json" -o -name "*.yaml" -o -name "*.yml" -o -name "*.toml" \
+                   -o -name "manifest.json" \
+                   -o -name "*.js" -o -name "*.ts" -o -name "*.mjs" -o -name "*.mts" \
+                   -o -name "*.jsx" -o -name "*.tsx" \) \
                 -not -path "*/node_modules/*" \
                 -not -path "*/.git/*" \
                 -print0 2>/dev/null || true)
@@ -185,11 +197,11 @@ check_untrusted_origins() {
         # Look for webmcp.services, webmcp.endpoints, or mcpServers with URLs
         local endpoints
         endpoints=$(jq -r '
-            (.webmcp.services // [])[] .origin // empty,
-            (.webmcp.endpoints // [])[] .origin // empty,
-            (.webmcp.endpoints // [])[] .url // empty,
-            (.mcpServers // {}) | to_entries[]? | .value.url // empty,
-            (.webmcp.trustedOrigins // [])[] // empty
+            ((.webmcp.services // [])[] | .origin // empty),
+            ((.webmcp.endpoints // [])[] | .origin // empty),
+            ((.webmcp.endpoints // [])[] | .url // empty),
+            ((.mcpServers // {}) | to_entries[]? | .value.url // empty),
+            ((.webmcp.trustedOrigins // [])[] | select(. != null))
         ' "$CONFIG_PATH" 2>/dev/null || true)
 
         while IFS= read -r endpoint; do
@@ -223,8 +235,8 @@ check_untrusted_origins() {
         local content
         content=$(cat "$file" 2>/dev/null || true)
 
-        # Look for WebMCP-like URL patterns in JSON files
-        if echo "$content" | grep -qi "webmcp\|modelContext\|mcpServer" 2>/dev/null; then
+        # Look for WebMCP-like URL patterns (including Chrome 146 API methods)
+        if echo "$content" | grep -qiE "webmcp|modelContext|mcpServer|provideContext|registerTool" 2>/dev/null; then
             # Extract URLs from the file
             local urls
             urls=$(echo "$content" | grep -oE '(https?|wss?)://[A-Za-z0-9._~:/?#\[\]@!$&'"'"'()*+,;=-]+' 2>/dev/null || true)
@@ -265,8 +277,8 @@ check_excessive_capabilities() {
     if [[ -f "$CONFIG_PATH" ]] && command -v jq &>/dev/null; then
         local cap_data
         cap_data=$(jq -r '
-            (.webmcp.services // [])[] | "\(.name // "unnamed"): \(.capabilities // [] | join(","))",
-            (.mcpServers // {}) | to_entries[]? | "\(.key): \(.value.capabilities // [] | join(","))"
+            ((.webmcp.services // [])[] | "\(.name // "unnamed"): \((.capabilities // []) | join(","))"),
+            ((.mcpServers // {}) | to_entries[]? | "\(.key): \((.value.capabilities // []) | join(","))")
         ' "$CONFIG_PATH" 2>/dev/null || true)
 
         while IFS= read -r line; do
@@ -303,7 +315,7 @@ check_excessive_capabilities() {
         content=$(cat "$file" 2>/dev/null || true)
 
         if echo "$content" | grep -qi "capabilities\|permissions" 2>/dev/null; then
-            if echo "$content" | grep -qi "webmcp\|modelContext\|mcpServer" 2>/dev/null; then
+            if echo "$content" | grep -qiE "webmcp|modelContext|mcpServer|provideContext|registerTool" 2>/dev/null; then
                 for sensitive in "${SENSITIVE_CAPS[@]}"; do
                     if contains_pattern "$content" "\"$sensitive\""; then
                         found_any=true
@@ -421,13 +433,14 @@ check_cross_origin_injection() {
     local found_any=false
 
     if [[ -f "$CONFIG_PATH" ]] && command -v jq &>/dev/null; then
-        # Extract all service declarations with their origins
+        # Extract all service declarations with their origins (null-safe)
         local svc_origins
         svc_origins=$(jq -r '
-            [(.webmcp.services // [])[] | {name: (.name // "unnamed"), origin: (.origin // "unknown")}] |
+            [(.webmcp.services // [])[] | {name: (.name // "unnamed"), origin: (.origin // null // "unknown")}] |
+            map(select(.origin != null)) |
             group_by(.origin) |
             map(select(length > 0) | {origin: .[0].origin, services: [.[].name]}) |
-            .[] | "\(.origin)|\(.services | join(","))"
+            .[] | "\(.origin // "unknown")|\(.services | join(","))"
         ' "$CONFIG_PATH" 2>/dev/null || true)
 
         # Check if origins can register services that look like they belong to other origins
@@ -501,7 +514,7 @@ check_cross_origin_injection() {
                 local manifest_content
                 manifest_content=$(cat "$manifest" 2>/dev/null || true)
 
-                if echo "$manifest_content" | grep -qi "webmcp\|model.context\|mcpServer" 2>/dev/null; then
+                if echo "$manifest_content" | grep -qiE "webmcp|model\.context|mcpServer|provideContext|registerTool" 2>/dev/null; then
                     found_any=true
                     # Check if extension has cross-origin permissions
                     local has_all_urls
@@ -576,7 +589,7 @@ check_data_exfiltration() {
         local content
         content=$(cat "$file" 2>/dev/null || true)
 
-        if echo "$content" | grep -qi "webmcp\|mcpServer" 2>/dev/null; then
+        if echo "$content" | grep -qiE "webmcp|mcpServer|provideContext|registerTool|modelContext" 2>/dev/null; then
             for pattern in "${SENSITIVE_DATA_PATTERNS[@]}"; do
                 if contains_pattern "$content" "$pattern"; then
                     found_any=true
@@ -636,11 +649,14 @@ check_prompt_injection() {
     local found_any=false
 
     if [[ -f "$CONFIG_PATH" ]] && command -v jq &>/dev/null; then
-        # Extract all service descriptions and names
+        # Extract all service descriptions and tool names
+        # Covers both config-level service declarations and provideContext-style
+        # tool registrations (Chrome 146 API: provideContext({ tools: [...] }))
         local svc_descs
         svc_descs=$(jq -r '
-            (.webmcp.services // [])[] | "\(.name // "unnamed")|\(.description // "")",
-            (.mcpServers // {}) | to_entries[]? | "\(.key)|\(.value.description // "")"
+            ((.webmcp.services // [])[] | "\(.name // "unnamed")|\(.description // "")"),
+            ((.webmcp.tools // [])[] | "\(.name // "unnamed")|\(.description // "")"),
+            ((.mcpServers // {}) | to_entries[]? | "\(.key)|\(.value.description // "")")
         ' "$CONFIG_PATH" 2>/dev/null || true)
 
         while IFS= read -r line; do
@@ -677,8 +693,8 @@ check_prompt_injection() {
         local content
         content=$(cat "$file" 2>/dev/null || true)
 
-        # Only check files with WebMCP references
-        if echo "$content" | grep -qi "webmcp\|mcpServer\|modelContext" 2>/dev/null; then
+        # Only check files with WebMCP references (config or Chrome 146 API)
+        if echo "$content" | grep -qiE "webmcp|mcpServer|modelContext|provideContext|registerTool" 2>/dev/null; then
             # Extract description-like fields
             local descriptions
             descriptions=$(echo "$content" | grep -oiE '"description"\s*:\s*"[^"]*"' 2>/dev/null || true)
@@ -704,6 +720,62 @@ check_prompt_injection() {
             done <<< "$descriptions"
         fi
     done < <(gather_webmcp_files)
+
+    # -----------------------------------------------------------------------
+    # Deep scan: Check JS/TS files for prompt injection in execute callbacks
+    # and provideContext tool registrations (Chrome 146 API).
+    #
+    # In the real API, tools are registered via:
+    #   navigator.modelContext.provideContext({ tools: [{ name, description,
+    #       inputSchema, execute: function(input) { ... } }] })
+    #   navigator.modelContext.registerTool({ name, description,
+    #       inputSchema, execute: function(input) { ... } })
+    #
+    # The execute callback source code can contain prompt injection payloads
+    # that get returned to the model as tool output.
+    # -----------------------------------------------------------------------
+    if [[ "$CLAWPINCH_DEEP" == "1" ]]; then
+        log_info "  Deep scan: checking JS/TS files for execute callback injection..."
+
+        local js_search_dirs=("$OPENCLAW_DIR")
+        [[ -d "$WORKSPACE_DIR" ]] && js_search_dirs+=("$WORKSPACE_DIR")
+        [[ -d "$SKILLS_DIR" ]] && js_search_dirs+=("$SKILLS_DIR")
+
+        for dir in "${js_search_dirs[@]}"; do
+            [[ ! -d "$dir" ]] && continue
+            while IFS= read -r -d '' jsfile; do
+                [[ ! -f "$jsfile" ]] && continue
+                local jscontent
+                jscontent=$(cat "$jsfile" 2>/dev/null || true)
+
+                # Look for provideContext or registerTool calls
+                if echo "$jscontent" | grep -qE '(provideContext|registerTool|modelContext)' 2>/dev/null; then
+                    found_any=true
+
+                    # Check for injection patterns in the entire file (covers
+                    # execute callbacks, description strings, and tool names)
+                    for pattern in "${PROMPT_INJECTION_PATTERNS[@]}"; do
+                        if echo "$jscontent" | grep -qiE "$pattern" 2>/dev/null; then
+                            FINDINGS+=("$(emit_finding \
+                                "CHK-WEB-006" \
+                                "critical" \
+                                "WebMCP prompt injection in tool execute callback" \
+                                "File $jsfile uses the WebMCP API (provideContext/registerTool) and contains prompt injection pattern ('$pattern'). Execute callbacks that return attacker-controlled strings can inject instructions into the model context." \
+                                "File: $jsfile, Pattern: $pattern" \
+                                "Audit execute callback return values. Sanitize any user/external data before returning it from tool execute functions. Do not embed instruction-like text in tool output." \
+                                ""
+                            )")
+                            break  # one finding per file
+                        fi
+                    done
+                fi
+            done < <(find "$dir" -maxdepth 5 \
+                \( -name "*.js" -o -name "*.ts" -o -name "*.mjs" -o -name "*.mts" -o -name "*.jsx" -o -name "*.tsx" \) \
+                -not -path "*/node_modules/*" \
+                -not -path "*/.git/*" \
+                -print0 2>/dev/null || true)
+        done
+    fi
 
     if ! $found_any; then
         log_info "  No prompt injection patterns found in service descriptions."
@@ -860,7 +932,7 @@ check_form_auto_submission() {
         local content
         content=$(cat "$file" 2>/dev/null || true)
 
-        if echo "$content" | grep -qi "webmcp\|mcpServer" 2>/dev/null; then
+        if echo "$content" | grep -qiE "webmcp|mcpServer|provideContext|registerTool|modelContext" 2>/dev/null; then
             if echo "$content" | grep -qiE "auto.?submit|inputSchema|declarative.?form" 2>/dev/null; then
                 if ! echo "$content" | grep -qi "confirmRequired.*true" 2>/dev/null; then
                     found_any=true
