@@ -38,6 +38,21 @@ if ! declare -f emit_finding >/dev/null 2>&1; then
 fi
 
 # ---------------------------------------------------------------------------
+# Sanitize a filename to prevent prompt injection when included in evidence.
+# Only allows alphanumeric characters, dots, dashes, and underscores.
+# Returns empty string if the filename contains disallowed characters.
+# ---------------------------------------------------------------------------
+sanitize_filename() {
+    local name
+    name="$(basename "$1")"
+    if [[ "$name" =~ ^[a-zA-Z0-9._-]+$ ]]; then
+        printf '%s' "$name"
+    else
+        printf '%s' "[invalid-filename]"
+    fi
+}
+
+# ---------------------------------------------------------------------------
 # Collect findings into an array
 # ---------------------------------------------------------------------------
 FINDINGS=()
@@ -57,25 +72,18 @@ failed_files=()
 for json_file in "${REFERENCE_FILES[@]}"; do
     json_basename="$(basename "$json_file")"
 
-    # Check if file exists
+    # Check if the JSON file itself exists (the .sha256 file is guaranteed
+    # to exist because REFERENCE_FILES is built from discovered .sha256 files)
     if [[ ! -f "$json_file" ]]; then
         integrity_failed=1
-        failed_files+=("$json_basename (missing)")
-        continue
-    fi
-
-    # Check if checksum file exists
-    sha256_file="${json_file}.sha256"
-    if [[ ! -f "$sha256_file" ]]; then
-        integrity_failed=1
-        failed_files+=("$json_basename (no checksum)")
+        failed_files+=("$(sanitize_filename "$json_basename") (missing)")
         continue
     fi
 
     # Verify integrity using the helper function
     if ! verify_json_integrity "$json_file"; then
         integrity_failed=1
-        failed_files+=("$json_basename (checksum mismatch)")
+        failed_files+=("$(sanitize_filename "$json_basename") (checksum mismatch)")
     fi
 done
 
@@ -95,7 +103,7 @@ if [[ $integrity_failed -eq 1 ]]; then
 else
     # OK: all integrity checks passed — build evidence string dynamically
     basenames=()
-    for f in "${REFERENCE_FILES[@]}"; do basenames+=("$(basename "$f")"); done
+    for f in "${REFERENCE_FILES[@]}"; do basenames+=("$(sanitize_filename "$f")"); done
     evidence_str="$(IFS=', '; echo "${basenames[*]}")"
     FINDINGS+=("$(emit_finding \
         "CHK-INT-001" \
