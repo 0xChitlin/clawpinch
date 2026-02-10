@@ -674,7 +674,7 @@ check_ssh_keys() {
       # [a-zA-Z0-9/._-]+, so we must not emit auto_fix for filenames with
       # characters outside that set (e.g., spaces, quotes, shell metacharacters).
       # Standard SSH key names (id_rsa, id_ed25519, *.pem) always pass this check.
-      local auto_fix_cmd="" remediation_msg="Run: chmod 600 \"$f\" (manual)"
+      local auto_fix_cmd="" remediation_msg="Manual fix required: chmod 600 [file]"
       if [[ "$f" =~ ^[a-zA-Z0-9/._-]+$ ]]; then
         auto_fix_cmd="chmod 600 $f"
         remediation_msg="Run: chmod 600 $f"
@@ -692,8 +692,8 @@ check_ssh_keys() {
         "$f mode $perms" "" ""
     fi
   done < <(find "$ssh_dir" -maxdepth 1 \( \
-    -name 'id_*' -o -name '*.pem' \
-  \) -type f ! -name '*.pub' -print0 2>/dev/null)
+    -iname 'id_*' -o -iname '*.pem' \
+  \) -type f ! -iname '*.pub' -print0 2>/dev/null)
 
   if [[ "$found" -eq 0 ]]; then
     add_finding "CHK-PRM-013" "info" \

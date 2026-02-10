@@ -351,6 +351,10 @@ EOF
             return 1
         fi
     done
+    # NOTE: This test verifies the chmod auto-fix command works correctly, but
+    # does not exercise the scanner's find/detect logic itself. This is
+    # consistent with other integration tests in this file which focus on
+    # auto-fix command validation rather than scanner detection coverage.
 }
 
 # ---------------------------------------------------------------------------
