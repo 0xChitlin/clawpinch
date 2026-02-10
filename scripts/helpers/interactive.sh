@@ -250,14 +250,6 @@ print_findings_compact() {
         f_title="${f_title:0:$((max_title_len - 3))}..."
       fi
 
-      # Fix indicator (fixed-width, no color padding issues)
-      local fix_mark
-      if [[ -n "$f_auto_fix" ]]; then
-        fix_mark=" ${_CLR_OK}✓${_CLR_RST} "
-      else
-        fix_mark=" ─ "
-      fi
-
       # Dim the row if suppressed
       local row_color=""
       if [[ "$f_suppressed" == "true" ]]; then

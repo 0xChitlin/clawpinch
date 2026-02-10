@@ -562,25 +562,14 @@ print_finding() {
   local inner=$(( w - 6 ))  # "  ┃ " left (4) + " ┃" right (2)
 
   local id severity title description evidence remediation auto_fix suppressed
-  {
-    read -r id
-    read -r severity
-    read -r title
-    read -r description
-    read -r evidence
-    read -r remediation
-    read -r auto_fix
-    read -r suppressed
-  } < <(echo "$json" | jq -r '
-    .id // "",
-    .severity // "info",
-    .title // "",
-    .description // "",
-    .evidence // "",
-    .remediation // "",
-    .auto_fix // "",
-    .suppressed // false
-  ')
+  id="$(echo "$json" | jq -r '.id // ""')"
+  severity="$(echo "$json" | jq -r '.severity // "info"')"
+  title="$(echo "$json" | jq -r '.title // ""')"
+  description="$(echo "$json" | jq -r '.description // ""')"
+  evidence="$(echo "$json" | jq -r '.evidence // ""')"
+  remediation="$(echo "$json" | jq -r '.remediation // ""')"
+  auto_fix="$(echo "$json" | jq -r '.auto_fix // ""')"
+  suppressed="$(echo "$json" | jq -r '.suppressed // false')"
 
   # For OK findings, use compact single-line format
   if [[ "$severity" == "ok" ]]; then

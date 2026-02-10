@@ -81,13 +81,7 @@ filter_findings() {
 
   # Get current timestamp
   local now
-  if command -v date &>/dev/null; then
-    if ! now="$(date -u +'%Y-%m-%dT%H:%M:%SZ' 2>/dev/null)"; then
-      now=""
-    fi
-  else
-    now=""
-  fi
+  now="$(date -u +'%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || true)"
 
   # Read findings from stdin and filter
   local findings
