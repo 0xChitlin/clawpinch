@@ -1,0 +1,145 @@
+{
+  "meta": {
+    "version": "1.0.0",
+    "last_updated": "2026-02-06",
+    "description": "Known malicious patterns from the ClawHavoc campaign and related supply chain attacks targeting the OpenClaw ecosystem."
+  },
+  "known_malicious_packages": [
+    "clawhub-cli",
+    "clawdhub",
+    "openclaw-helper",
+    "openclaw-utils",
+    "phantom-wallet-skill",
+    "solana-pay-pro",
+    "claw-hub-cli",
+    "openclaw-plugin-helper",
+    "openclaw-core-utils",
+    "clawhub-sdk",
+    "openclaw-wallet-connect",
+    "claw-skill-loader"
+  ],
+  "suspicious_domains": [
+    "raw.githubusercontent.com/*/exec",
+    "pastebin.com",
+    "transfer.sh",
+    "paste.ee",
+    "hastebin.com",
+    "cdn-claw.xyz",
+    "openclaw-cdn.com",
+    "clawstatic.net",
+    "rentry.co",
+    "gist.githubusercontent.com/*/raw"
+  ],
+  "dangerous_patterns": [
+    {
+      "id": "PAT-001",
+      "pattern": "curl.*\\|.*bash",
+      "severity": "critical",
+      "description": "Remote code execution via pipe to bash"
+    },
+    {
+      "id": "PAT-002",
+      "pattern": "wget.*\\|.*sh",
+      "severity": "critical",
+      "description": "Remote code execution via pipe to sh"
+    },
+    {
+      "id": "PAT-003",
+      "pattern": "eval\\(atob\\(",
+      "severity": "critical",
+      "description": "Base64-decoded eval execution"
+    },
+    {
+      "id": "PAT-004",
+      "pattern": "eval\\(Buffer\\.from\\(",
+      "severity": "critical",
+      "description": "Buffer-decoded eval execution"
+    },
+    {
+      "id": "PAT-005",
+      "pattern": "child_process.*exec",
+      "severity": "warn",
+      "description": "Shell command execution via child_process"
+    },
+    {
+      "id": "PAT-006",
+      "pattern": "child_process.*spawn",
+      "severity": "warn",
+      "description": "Process spawning via child_process"
+    },
+    {
+      "id": "PAT-007",
+      "pattern": "LaunchAgents|launchctl",
+      "severity": "critical",
+      "description": "macOS persistence mechanism via LaunchAgents"
+    },
+    {
+      "id": "PAT-008",
+      "pattern": "osascript.*display",
+      "severity": "warn",
+      "description": "macOS dialog social engineering via osascript"
+    },
+    {
+      "id": "PAT-009",
+      "pattern": "security find-generic-password",
+      "severity": "critical",
+      "description": "macOS Keychain credential access"
+    },
+    {
+      "id": "PAT-010",
+      "pattern": "Cookies|Login Data|Web Data",
+      "severity": "critical",
+      "description": "Browser credential and cookie theft"
+    },
+    {
+      "id": "PAT-011",
+      "pattern": "\\$\\(curl|\\$\\(wget",
+      "severity": "critical",
+      "description": "Command substitution fetching remote code"
+    },
+    {
+      "id": "PAT-012",
+      "pattern": "\\.npmrc|_authToken",
+      "severity": "critical",
+      "description": "NPM authentication token exfiltration"
+    },
+    {
+      "id": "PAT-013",
+      "pattern": "process\\.env\\.(AWS|GITHUB|NPM|TOKEN|SECRET|KEY|PASSWORD)",
+      "severity": "warn",
+      "description": "Environment variable credential harvesting"
+    },
+    {
+      "id": "PAT-014",
+      "pattern": "dns\\.resolve.*TXT|dgram.*send",
+      "severity": "critical",
+      "description": "DNS-based data exfiltration"
+    },
+    {
+      "id": "PAT-015",
+      "pattern": "require\\(['\"]https?['\"]\\)\\.get\\(",
+      "severity": "warn",
+      "description": "HTTP exfiltration of collected data"
+    }
+  ],
+  "clawhavoc_indicators": {
+    "description": "Specific indicators of compromise from the ClawHavoc campaign",
+    "install_hook_payloads": [
+      "node -e \"require('https').get",
+      "node -e \"require('child_process').exec",
+      "bash -c \"$(curl -fsSL"
+    ],
+    "c2_patterns": [
+      "api.openclaw-cdn.com",
+      "cdn-claw.xyz/update",
+      "clawstatic.net/pkg"
+    ],
+    "file_targets": [
+      "~/.openclaw/credentials.json",
+      "~/.openclaw/wallet.json",
+      "~/Library/Keychains",
+      "~/.ssh/id_*",
+      "~/.gnupg/private-keys*"
+    ]
+  }
+}

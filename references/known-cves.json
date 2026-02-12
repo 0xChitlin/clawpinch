@@ -1,0 +1,35 @@
+[
+  {
+    "id": "CVE-2026-25253",
+    "severity": "critical",
+    "cvss": 8.8,
+    "title": "1-Click RCE via auth token exfiltration",
+    "fixed_in": "2026.1.29",
+    "description": "Cross-site WebSocket hijacking. Control UI trusts gatewayUrl from query string, leaking gateway auth token.",
+    "references": [
+      "https://nvd.nist.gov/vuln/detail/CVE-2026-25253"
+    ]
+  },
+  {
+    "id": "CVE-2026-24763",
+    "severity": "critical",
+    "cvss": 8.8,
+    "title": "Command injection in Docker sandbox",
+    "fixed_in": "2026.1.29",
+    "description": "Unsafe PATH env var handling in shell command construction.",
+    "references": [
+      "https://nvd.nist.gov/vuln/detail/CVE-2026-24763"
+    ]
+  },
+  {
+    "id": "CVE-2026-25157",
+    "severity": "critical",
+    "cvss": 8.8,
+    "title": "OS command injection via SSH project path",
+    "fixed_in": "2026.1.29",
+    "description": "Unescaped project root path in sshNodeCommand error echo.",
+    "references": [
+      "https://nvd.nist.gov/vuln/detail/CVE-2026-25157"
+    ]
+  }
+]
